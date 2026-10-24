@@ -140,6 +140,13 @@ model Character {
   guildMembership GuildMember?
   marketOffersSold   MarketOffer[]  @relation("MarketSeller")
   marketOffersBought MarketOffer[]  @relation("MarketBuyer")
+  chatMessagesSent      ChatMessage[]  @relation("ChatAuthor")
+  chatMessagesReceived  ChatMessage[]  @relation("ChatRecipient")
+  blocksMade            PlayerBlock[]  @relation("BlockBlocker")
+  blocksReceived        PlayerBlock[]  @relation("BlockBlocked")
+  reportsMade           Report[]       @relation("ReportReporter")
+  reportsReceived       Report[]       @relation("ReportTarget")
+  sanctions             Sanction[]
 
   @@unique([server, nameKey])
   @@unique([userId, server])
@@ -557,6 +564,87 @@ model MarketOffer {
 
   @@index([sellerCharacterId])
   @@map("market_offers")
+}
+
+// --- Czat i moderacja (wersja 4, docs/gdd/12-spolecznosc.md) -------------
+
+enum ChatChannel {
+  GENERAL
+  TRADE
+  GUILD
+  DM
+}
+
+model ChatMessage {
+  id                  String      @id @default(cuid())
+  channel             ChatChannel
+  authorCharacterId   String
+  authorCharacter     Character   @relation("ChatAuthor", fields: [authorCharacterId], references: [id], onDelete: Cascade)
+  // tylko kanał GUILD
+  guildId             String?
+  // tylko kanał DM
+  recipientCharacterId String?
+  recipientCharacter  Character?  @relation("ChatRecipient", fields: [recipientCharacterId], references: [id], onDelete: Cascade)
+  content             String
+  createdAt           DateTime    @default(now())
+
+  @@index([channel, createdAt])
+  @@index([guildId])
+  @@index([authorCharacterId, recipientCharacterId])
+  @@map("chat_messages")
+}
+
+model PlayerBlock {
+  id                  String    @id @default(cuid())
+  blockerCharacterId  String
+  blockerCharacter    Character @relation("BlockBlocker", fields: [blockerCharacterId], references: [id], onDelete: Cascade)
+  blockedCharacterId  String
+  blockedCharacter    Character @relation("BlockBlocked", fields: [blockedCharacterId], references: [id], onDelete: Cascade)
+  createdAt           DateTime  @default(now())
+
+  @@unique([blockerCharacterId, blockedCharacterId])
+  @@map("player_blocks")
+}
+
+// zgłoszenia graczy z kontekstem czatu lub raportu (docs/gdd/13-technika.md)
+model Report {
+  id                  String    @id @default(cuid())
+  reporterCharacterId String
+  reporterCharacter   Character @relation("ReportReporter", fields: [reporterCharacterId], references: [id], onDelete: Cascade)
+  targetCharacterId   String
+  targetCharacter     Character @relation("ReportTarget", fields: [targetCharacterId], references: [id], onDelete: Cascade)
+  reason              String
+  // ostatnie 20 wiadomości w momencie zgłoszenia (docs/gdd/12-spolecznosc.md)
+  contextSnapshot     Json      @default("[]")
+  resolved            Boolean   @default(false)
+  resolution          String?
+  resolvedByUserId    String?
+  createdAt           DateTime  @default(now())
+
+  @@index([targetCharacterId])
+  @@index([resolved])
+  @@map("reports")
+}
+
+enum SanctionType {
+  MUTE
+  TRADE_BAN
+  ACCOUNT_BAN
+}
+
+// kary stopniowane, każda zapisana z powodem (docs/gdd/12-spolecznosc.md)
+model Sanction {
+  id              String       @id @default(cuid())
+  characterId     String
+  character       Character    @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  type            SanctionType
+  reason          String
+  expiresAt       DateTime?
+  createdByUserId String
+  createdAt       DateTime     @default(now())
+
+  @@index([characterId, type])
+  @@map("sanctions")
 }
 
 model GameEvent {
