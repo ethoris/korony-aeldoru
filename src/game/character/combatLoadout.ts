@@ -4,6 +4,7 @@ import { deityCombatBonuses } from "@/game/data/deities";
 import type { DeityKey } from "@/game/data/deities";
 import { AFFIXES } from "@/game/data/itemAffixes";
 import type { ItemAffixInstance, ItemSlot } from "@/game/items/types";
+import { RUNE_ELEMENTS, upgradeEffectPercent } from "@/game/items/upgrade";
 
 /**
  * Buduje konfigurację bohatera do silnika walki z PRAWDZIWYCH statystyk
@@ -42,6 +43,8 @@ export interface EquippedItemSummary {
   damageMax: number | null;
   armor: number | null;
   traits: ItemAffixInstance[];
+  upgrade?: number;
+  rune?: string | null;
 }
 
 /**
@@ -66,10 +69,15 @@ export function buildHeroConfigFromEquipment(params: {
   deity?: DeityKey;
 }): HeroConfig {
   const weapon = params.equippedItems.find((i) => i.slot === "WEAPON");
-  const weaponDamage =
+  const weaponBase =
     weapon && weapon.damageMin != null && weapon.damageMax != null ? (weapon.damageMin + weapon.damageMax) / 2 : 0;
+  // +2% za poziom ulepszenia kowala, +10 = +20% (docs/gdd/08-ekwipunek.md).
+  const weaponDamage = weaponBase * (1 + upgradeEffectPercent(weapon?.upgrade ?? 0) / 100);
 
-  const armorFromGear = params.equippedItems.reduce((sum, item) => sum + (item.armor ?? 0), 0);
+  const armorFromGear = params.equippedItems.reduce(
+    (sum, item) => sum + (item.armor ?? 0) * (1 + upgradeEffectPercent(item.upgrade ?? 0) / 100),
+    0,
+  );
   const hasShield = params.classKey === "PALADIN" && params.equippedItems.some((i) => i.slot === "OFFHAND");
 
   const stats: Stats = { ...params.stats };
@@ -117,6 +125,13 @@ export function buildHeroConfigFromEquipment(params: {
           break;
       }
     }
+  }
+
+  // Runa Kuźni (docs/gdd/02-systemy-walki.md) ma pierwszeństwo nad losową
+  // cechą żywiołu broni; uproszczenie jak przy cesze – cały atak przyjmuje
+  // żywioł rany, nie tylko 30% obrażeń (silnik liczy jeden żywioł na atak).
+  if (weapon?.rune && (RUNE_ELEMENTS as string[]).includes(weapon.rune)) {
+    gearWeaponElement = weapon.rune as Element;
   }
 
   const deityBonus = params.deity

@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import type { ClassKey } from "@/game/combat/types";
+import type { ClassKey, Element } from "@/game/combat/types";
+import { MAX_UPGRADE_LEVEL, RUNE_ELEMENTS, RUNE_KUZNIA_LEVEL, UPGRADABLE_SLOTS, upgradeTier } from "@/game/items/upgrade";
 
 interface Trait {
   key: string;
@@ -24,7 +25,18 @@ interface ItemView {
   traits: Trait[];
   location: string;
   locked: boolean;
+  upgrade: number;
+  rune: string | null;
 }
+
+const RUNE_LABELS: Record<string, string> = {
+  fire: "Ogień",
+  ice: "Lód",
+  lightning: "Błyskawica",
+  light: "Światło",
+  shadow: "Cień",
+  poison: "Trucizna",
+};
 
 const SLOT_ORDER = ["WEAPON", "OFFHAND", "HELMET", "ARMOR", "GLOVES", "BOOTS", "AMULET", "RING"];
 const SLOT_LABELS: Record<string, string> = {
@@ -65,10 +77,19 @@ function statLine(item: ItemView): string {
   return "—";
 }
 
-export function InventoryClient({ items, characterClass }: { items: ItemView[]; characterClass: ClassKey }) {
+export function InventoryClient({
+  items,
+  characterClass,
+  kuzniaLevel,
+}: {
+  items: ItemView[];
+  characterClass: ClassKey;
+  kuzniaLevel: number;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [runeChoice, setRuneChoice] = useState<Element>("fire");
 
   const equippedBySlot = new Map(items.filter((i) => i.location === "EQUIPPED").map((i) => [i.slot, i]));
   const backpack = items.filter((i) => i.location === "BACKPACK");
@@ -81,6 +102,40 @@ export function InventoryClient({ items, characterClass }: { items: ItemView[]; 
     setPendingId(null);
     if (!response.ok) {
       setError(data.error ?? "Nie udało się wykonać akcji.");
+      return;
+    }
+    router.refresh();
+  }
+
+  async function upgrade(itemId: string) {
+    setError(null);
+    setPendingId(itemId);
+    const response = await fetch("/api/forge/upgrade", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setPendingId(null);
+    if (!response.ok) {
+      setError(data.error ?? "Nie udało się ulepszyć przedmiotu.");
+      return;
+    }
+    router.refresh();
+  }
+
+  async function rune(itemId: string, element: Element) {
+    setError(null);
+    setPendingId(itemId);
+    const response = await fetch("/api/forge/rune", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId, element }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setPendingId(null);
+    if (!response.ok) {
+      setError(data.error ?? "Nie udało się nałożyć runy.");
       return;
     }
     router.refresh();
@@ -100,18 +155,65 @@ export function InventoryClient({ items, characterClass }: { items: ItemView[]; 
                 <p className="text-xs text-muted">{SLOT_LABELS[slot]}</p>
                 {item ? (
                   <>
-                    <p className={QUALITY_CLASS[item.quality]}>{item.name}</p>
+                    <p className={QUALITY_CLASS[item.quality]}>
+                      {item.name}
+                      {item.upgrade > 0 && <span className="text-accent"> +{item.upgrade}</span>}
+                    </p>
                     <p className="text-xs text-muted">
                       poz. {item.level} · {statLine(item)}
                     </p>
-                    <button
-                      type="button"
-                      disabled={pendingId === item.id}
-                      onClick={() => act(item.id, "unequip")}
-                      className="mt-1 rounded border border-line px-2 py-1 text-xs text-foreground disabled:opacity-40"
-                    >
-                      Zdejmij
-                    </button>
+                    {item.slot === "WEAPON" && item.rune && (
+                      <p className="text-xs text-muted">Runa: {RUNE_LABELS[item.rune] ?? item.rune}</p>
+                    )}
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      <button
+                        type="button"
+                        disabled={pendingId === item.id}
+                        onClick={() => act(item.id, "unequip")}
+                        className="rounded border border-line px-2 py-1 text-xs text-foreground disabled:opacity-40"
+                      >
+                        Zdejmij
+                      </button>
+                      {UPGRADABLE_SLOTS.includes(item.slot as (typeof UPGRADABLE_SLOTS)[number]) && (
+                        <button
+                          type="button"
+                          disabled={
+                            pendingId === item.id ||
+                            item.upgrade >= MAX_UPGRADE_LEVEL ||
+                            kuzniaLevel < (upgradeTier(item.upgrade + 1)?.kuzniaLevelRequired ?? 99)
+                          }
+                          onClick={() => upgrade(item.id)}
+                          title={`Kuźnia poz. ${upgradeTier(item.upgrade + 1)?.kuzniaLevelRequired ?? "?"} wymagana`}
+                          className="rounded bg-accent px-2 py-1 text-xs font-semibold text-background disabled:opacity-40"
+                        >
+                          Ulepsz (+{item.upgrade + 1})
+                        </button>
+                      )}
+                    </div>
+                    {item.slot === "WEAPON" && (
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        <select
+                          value={runeChoice}
+                          onChange={(e) => setRuneChoice(e.target.value as Element)}
+                          className="rounded border border-line bg-background px-1 py-1 text-xs text-foreground"
+                        >
+                          {RUNE_ELEMENTS.map((el) => (
+                            <option key={el} value={el}>
+                              {RUNE_LABELS[el]}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={pendingId === item.id || kuzniaLevel < RUNE_KUZNIA_LEVEL}
+                          onClick={() => rune(item.id, runeChoice)}
+                          title={`Kuźnia poz. ${RUNE_KUZNIA_LEVEL} wymagana`}
+                          className="rounded border border-line px-2 py-1 text-xs text-foreground disabled:opacity-40"
+                        >
+                          Nałóż runę
+                        </button>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <p className="text-muted">—</p>

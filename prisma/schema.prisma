@@ -213,7 +213,10 @@ model Item {
 
   traits  Json    @default("[]")
   upgrade Int     @default(0)
-  rune    String?
+  // Licznik nieudanych ulepszeń z rzędu – ochrona przed pechem, +5% szansy
+  // na kolejną próbę (docs/gdd/08-ekwipunek.md), zerowany po sukcesie.
+  upgradeFailStreak Int     @default(0)
+  rune              String?
 
   location ItemLocation @default(BACKPACK)
   locked   Boolean      @default(false)
@@ -358,6 +361,8 @@ enum ItemEventType {
   EXPIRED
   RESTORED
   DELETED
+  UPGRADED
+  RUNE_APPLIED
 }
 
 model ItemEvent {

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { getCharacterForUser } from "@/lib/expeditions";
+import { getFortressView } from "@/lib/fortress";
 import { prisma } from "@/lib/prisma";
 
 import { InventoryClient } from "./InventoryClient";
@@ -34,11 +35,16 @@ export default async function InventoryPage() {
     traits: item.traits as unknown as Array<{ key: string; value: number; label: string }>,
     location: item.location,
     locked: item.locked,
+    upgrade: item.upgrade,
+    rune: item.rune,
   }));
+
+  const fortress = await getFortressView(character.id);
+  const kuzniaLevel = (fortress?.buildingLevels as Record<string, number> | undefined)?.KUZNIA ?? 0;
 
   return (
     <main className="flex flex-1 justify-center p-4">
-      <InventoryClient items={serialized} characterClass={character.class} />
+      <InventoryClient items={serialized} characterClass={character.class} kuzniaLevel={kuzniaLevel} />
     </main>
   );
 }
