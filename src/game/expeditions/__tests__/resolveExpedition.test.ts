@@ -127,4 +127,35 @@ describe("resolveExpedition", () => {
       }
     }
   });
+
+  it("cechy ekwipunku +% złota i +% PD zwiększają nagrody z wygranej walki", () => {
+    const location = getLocation("goblinia-nora");
+    const boosted = {
+      ...level1Params,
+      equippedItems: [
+        ...level1Params.equippedItems,
+        {
+          slot: "AMULET" as const,
+          damageMin: null,
+          armor: null,
+          damageMax: null,
+          traits: [
+            { key: "goldFromExpeditionsPercent", value: 10, label: "+10% złota z wypraw" },
+            { key: "experiencePercent", value: 6, label: "+6% PD" },
+          ],
+        },
+      ],
+    };
+
+    for (let seed = 1; seed <= 200; seed++) {
+      const plain = resolveExpedition({ ...level1Params, location, kind: "HUNT", seed });
+      const withBonus = resolveExpedition({ ...boosted, location, kind: "HUNT", seed });
+      if (plain.fights[0].battle.result !== "WIN") continue;
+
+      expect(withBonus.fights[0].xpGained).toBe(Math.round(plain.fights[0].xpGained * 1.06));
+      expect(withBonus.fights[0].goldDelta).toBe(Math.round(plain.fights[0].goldDelta * 1.1));
+      return;
+    }
+    throw new Error("żaden z 200 seedów nie dał wygranej do porównania");
+  });
 });

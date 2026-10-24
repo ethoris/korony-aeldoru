@@ -56,17 +56,21 @@ function resolveAttack(
     forceHit?: boolean;
     forceCrit?: boolean;
     ignoreResist?: boolean;
+    /** Procentowe cechy ekwipunku (docs/gdd/08-ekwipunek.md); tylko dla ciosów bohatera. */
+    gearHitBonus?: number;
+    gearCritBonus?: number;
   },
 ): AttackResolution {
   const dexAdv = dexterityAdvantage(params.attackerDex, params.defenderDex, params.attackerLevel, params.defenderLevel);
-  const chance = hitChance(params.attackerLevel, params.defenderLevel, dexAdv);
+  const chance = Math.min(0.95, hitChance(params.attackerLevel, params.defenderLevel, dexAdv) + (params.gearHitBonus ?? 0) / 100);
   const hit = params.forceHit ? true : rollChance(rng, chance);
 
   if (!hit) {
     return { hit: false, crit: false, damage: 0, element: params.element, weakHit: false, resistHit: false };
   }
 
-  const crit = params.forceCrit ? true : rollChance(rng, critChance(params.attackerDex, params.attackerLevel));
+  const critChanceValue = critChance(params.attackerDex, params.attackerLevel) + (params.gearCritBonus ?? 0) / 100;
+  const crit = params.forceCrit ? true : rollChance(rng, critChanceValue);
   const reduction = params.ignoreDefense ? 0 : damageReduction(params.defenseValue, params.attackerLevel);
   let elementMult = elementMultiplier(params.element, params.weakTo as Element[], params.resistTo as Element[]);
   if (params.ignoreResist && elementMult < 1) elementMult = 1;
@@ -95,7 +99,8 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
   const defTacticMult = tactic === "AGGRESSIVE" ? 0.85 : tactic === "DEFENSIVE" ? 1.15 : 1;
 
   const mainStatValue = hero.stats[classDef.mainStat];
-  const heroAttackPower = attackPower(hero.weaponDamage, mainStatValue) * atkTacticMult;
+  const heroAttackPower =
+    attackPower(hero.weaponDamage, mainStatValue) * atkTacticMult * (1 + (hero.gearDamagePercent ?? 0) / 100);
   const heroDefenseValue = heroDefense(hero.armorFromGear, hero.stats.vitality) * defTacticMult;
   const heroMaxHpValue = heroMaxHp(hero.stats.vitality, hero.level) + (hero.bonusMaxHp ?? 0);
   const heroDex = hero.stats.dexterity;
@@ -115,7 +120,8 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
   const events: BattleEvent[] = [];
   let paladinHealUsed = false;
 
-  const heroElement: Element = hero.classKey === "MAGE" ? hero.spellElement ?? "fire" : "physical";
+  const heroElement: Element =
+    hero.classKey === "MAGE" ? hero.spellElement ?? "fire" : hero.gearWeaponElement ?? "physical";
 
   function pushStatus(turn: number, actor: CombatSide, text: string, targetHpAfter?: number): void {
     events.push({ kind: "status", turn, actor, text, targetHpAfter });
@@ -146,6 +152,8 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
       forceHit: overrides.forceHit,
       forceCrit: overrides.forceCrit,
       ignoreResist: overrides.ignoreResist,
+      gearHitBonus: hero.gearHitPercent,
+      gearCritBonus: hero.gearCritPercent,
     });
 
     if (resolution.hit) {
@@ -193,7 +201,7 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
       resistTo: [],
     });
 
-    const blockChance = (hero.hasShield ? 0.15 : 0) + abilities.extraBlockChance();
+    const blockChance = (hero.hasShield ? 0.15 : 0) + abilities.extraBlockChance() + (hero.gearBlockPercent ?? 0) / 100;
     const blocked = blockChance > 0 && resolution.hit && rollChance(rng, blockChance);
     const dodged = !blocked && resolution.hit && abilities.rollExtraDodge(rng);
 

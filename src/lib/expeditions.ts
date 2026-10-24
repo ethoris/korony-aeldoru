@@ -8,6 +8,7 @@ import { MAX_STAMINA, regenerateStamina } from "@/game/character/stamina";
 import type { Element, ExpeditionKind, Tactic } from "@/game/combat/types";
 import { generateReport } from "@/game/combat/generateReport";
 import { EXPEDITION_KINDS } from "@/game/data/expeditionKinds";
+import { AFFIXES } from "@/game/data/itemAffixes";
 import { getLocation, LOCATIONS } from "@/game/data/locations";
 import { getMonster } from "@/game/data/monsters";
 import { resolveExpedition } from "@/game/expeditions/resolveExpedition";
@@ -130,7 +131,15 @@ export async function startExpedition(
     return { error: `Potrzebujesz ${stamina} wytrwałości, masz ${regen.stamina}.` };
   }
 
-  const durationMs = Math.round(location.timeMinutes * kindDef.timeMultiplier * 60 * 1000);
+  const equippedItemsAtStart = await loadEquippedItems(prisma, characterId);
+  const timeReductionPercent = Math.min(
+    AFFIXES.expeditionTimeReductionPercent.cap ?? Infinity,
+    equippedItemsAtStart.reduce(
+      (sum, item) => sum + item.traits.filter((t) => t.key === "expeditionTimeReductionPercent").reduce((s, t) => s + t.value, 0),
+      0,
+    ),
+  );
+  const durationMs = Math.round(location.timeMinutes * kindDef.timeMultiplier * 60 * 1000 * (1 - timeReductionPercent / 100));
   const endAt = new Date(now.getTime() + durationMs);
   const seed = BigInt(Math.floor(Math.random() * 0xffffffff) + 1);
 

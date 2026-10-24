@@ -1,5 +1,6 @@
 import { computeArmorTotal, computeShieldArmor, computeWeaponDamage } from "@/game/combat/equipment";
 import type { ClassKey, Element, HeroConfig, Stats, Tactic } from "@/game/combat/types";
+import { AFFIXES } from "@/game/data/itemAffixes";
 import type { ItemAffixInstance, ItemSlot } from "@/game/items/types";
 
 /**
@@ -42,11 +43,13 @@ export interface EquippedItemSummary {
 }
 
 /**
- * Buduje konfigurację bohatera z NAPRAWDĘ założonych przedmiotów (krok 6).
- * Płaskie cechy (+SIŁ/+ZRĘ/+WYT/+INT, +PŻ) są wliczone; procentowe cechy
- * walki (+% obrażeń/krytyka/trafienia/bloku, odporności, żywioł broni) są
- * zapisane na przedmiocie, ale jeszcze nie wpływają na silnik – patrz
- * podsumowanie kroku 6.
+ * Buduje konfigurację bohatera z NAPRAWDĘ założonych przedmiotów. Płaskie
+ * cechy (+SIŁ/+ZRĘ/+WYT/+INT, +PŻ) i procentowe cechy walki (+% obrażeń/
+ * krytyka/trafienia/bloku, żywioł broni) są wliczone. Odporność na żywioł
+ * (elementResistPercent) NIE jest jeszcze wliczona – żaden potwór w tej
+ * wersji nie zadaje obrażeń żywiołem (ataki potworów są zawsze fizyczne,
+ * docs/gdd/04-bestiariusz.md typy żywiołów potworów nie są jeszcze
+ * podłączone do ich własnych atakow), więc cecha nie miałaby jak zadziałać.
  */
 export function buildHeroConfigFromEquipment(params: {
   classKey: ClassKey;
@@ -67,6 +70,11 @@ export function buildHeroConfigFromEquipment(params: {
 
   const stats: Stats = { ...params.stats };
   let bonusMaxHp = 0;
+  let gearDamagePercent = 0;
+  let gearCritPercent = 0;
+  let gearHitPercent = 0;
+  let gearBlockPercent = 0;
+  let gearWeaponElement: Element | undefined;
 
   for (const item of params.equippedItems) {
     for (const affix of item.traits) {
@@ -86,6 +94,21 @@ export function buildHeroConfigFromEquipment(params: {
         case "maxHp":
           bonusMaxHp += affix.value;
           break;
+        case "damagePercent":
+          gearDamagePercent += affix.value;
+          break;
+        case "critPercent":
+          gearCritPercent += affix.value;
+          break;
+        case "hitPercent":
+          gearHitPercent += affix.value;
+          break;
+        case "blockPercent":
+          gearBlockPercent += affix.value;
+          break;
+        case "elementalWeaponDamagePercent":
+          if (item.slot === "WEAPON" && affix.element) gearWeaponElement = affix.element;
+          break;
         default:
           break;
       }
@@ -104,5 +127,10 @@ export function buildHeroConfigFromEquipment(params: {
     startingHpOverride: params.startingHpOverride,
     bonusMaxHp,
     selectedAbilities: params.selectedAbilities,
+    gearDamagePercent,
+    gearCritPercent: Math.min(gearCritPercent, AFFIXES.critPercent.cap ?? Infinity),
+    gearHitPercent,
+    gearBlockPercent,
+    gearWeaponElement,
   };
 }

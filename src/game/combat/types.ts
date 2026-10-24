@@ -51,6 +51,13 @@ export interface HeroConfig {
    * klas"); zdolność z poziomu 1 jest dodawana automatycznie przez silnik.
    */
   selectedAbilities?: string[];
+  /** Procentowe cechy z ekwipunku (docs/gdd/08-ekwipunek.md, "Losowe cechy"). */
+  gearDamagePercent?: number;
+  gearCritPercent?: number;
+  gearHitPercent?: number;
+  gearBlockPercent?: number;
+  /** Żywioł broni z cechy "żywiołu broni" (zamiast fizycznych obrażeń), gdy przedmiot ją ma. */
+  gearWeaponElement?: Element;
 }
 
 export interface MonsterConfig {

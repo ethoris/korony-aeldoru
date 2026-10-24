@@ -4,10 +4,21 @@ import { createRng, randomInt } from "@/game/combat/rng";
 import { simulateBattle } from "@/game/combat/simulate";
 import type { BattleOutcome, BattleResult, ClassKey, Element, ExpeditionKind, MonsterConfig, Stats, Tactic } from "@/game/combat/types";
 import { EXPEDITION_KINDS } from "@/game/data/expeditionKinds";
+import { AFFIXES } from "@/game/data/itemAffixes";
 import type { LocationDefinition } from "@/game/data/locations";
 import { getMonster } from "@/game/data/monsters";
 import { generateLoot } from "@/game/items/generateItem";
 import type { GeneratedItem, ItemQuality } from "@/game/items/types";
+
+/** Suma procentowej cechy ekwipunku (np. +% złota z wypraw), z limitem cross-item z docs/gdd/08-ekwipunek.md. */
+function sumGearPercent(items: EquippedItemSummary[], key: "goldFromExpeditionsPercent" | "experiencePercent"): number {
+  const total = items.reduce(
+    (sum, item) => sum + item.traits.filter((t) => t.key === key).reduce((s, t) => s + t.value, 0),
+    0,
+  );
+  const cap = AFFIXES[key].cap;
+  return cap != null ? Math.min(total, cap) : total;
+}
 
 export interface FightOutcome {
   monsterKey: string;
@@ -72,6 +83,9 @@ export function resolveExpedition(params: ResolveExpeditionParams): ExpeditionRe
     selectedAbilities: params.selectedAbilities,
   });
 
+  const goldBonusPercent = sumGearPercent(params.equippedItems, "goldFromExpeditionsPercent");
+  const xpBonusPercent = sumGearPercent(params.equippedItems, "experiencePercent");
+
   const fights: FightOutcome[] = [];
   let runningGold = params.startingGoldPouch;
   let pity = params.fightsSinceRareDrop;
@@ -100,8 +114,8 @@ export function resolveExpedition(params: ResolveExpeditionParams): ExpeditionRe
     let lootItem: GeneratedItem | null = null;
 
     if (battle.result === "WIN") {
-      xpGained = fullXp;
-      goldDelta = Math.round(3 * monster.level * (0.8 + rng() * 0.4) * kindDef.goldMultiplier);
+      xpGained = Math.round(fullXp * (1 + xpBonusPercent / 100));
+      goldDelta = Math.round(3 * monster.level * (0.8 + rng() * 0.4) * kindDef.goldMultiplier * (1 + goldBonusPercent / 100));
       runningGold += goldDelta;
 
       const lootChance = isBossRun ? 1 : kindDef.lootChance;
@@ -124,13 +138,13 @@ export function resolveExpedition(params: ResolveExpeditionParams): ExpeditionRe
         pity += 1;
       }
     } else if (battle.result === "LOSE") {
-      xpGained = Math.round(fullXp * 0.3);
+      xpGained = Math.round(fullXp * 0.3 * (1 + xpBonusPercent / 100));
       const penalty = Math.round(runningGold * 0.05);
       goldDelta = -penalty;
       runningGold -= penalty;
     } else {
       // DRAW lub RETREAT
-      xpGained = Math.round(fullXp * 0.5);
+      xpGained = Math.round(fullXp * 0.5 * (1 + xpBonusPercent / 100));
     }
 
     fights.push({
