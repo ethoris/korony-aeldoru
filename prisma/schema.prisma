@@ -128,6 +128,7 @@ model Character {
   itemEvents     ItemEvent[]
   gameEvents     GameEvent[]
   consumables    Consumable[]
+  fortress       Fortress?
 
   @@unique([server, nameKey])
   @@unique([userId, server])
@@ -399,6 +400,47 @@ model Consumable {
 
   @@unique([characterId, kind])
   @@map("consumables")
+}
+
+// --- Twierdza (wersja 3, docs/gdd/09-twierdza-i-wojna.md) ----------------
+
+model Fortress {
+  id          String    @id @default(cuid())
+  characterId String    @unique
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  // poziomy budynków: Record<klucz z src/game/data/buildings.ts, number>
+  buildingLevels Json @default("{}")
+
+  wood      Int @default(0)
+  stone     Int @default(0)
+  iron      Int @default(0)
+  food      Int @default(0)
+  mana      Int @default(0)
+  goldVault Int @default(0)
+
+  lastProductionAt DateTime @default(now())
+  // 7 dni ochrony nowych graczy przed napadami (docs/gdd/00-glowny.md); wykorzysta wersja 4.
+  protectionUntil  DateTime
+
+  createdAt DateTime @default(now())
+
+  buildQueue BuildQueueEntry[]
+
+  @@map("fortresses")
+}
+
+model BuildQueueEntry {
+  id          String   @id @default(cuid())
+  fortressId  String
+  fortress    Fortress @relation(fields: [fortressId], references: [id], onDelete: Cascade)
+  building    String
+  targetLevel Int
+  startedAt   DateTime @default(now())
+  endAt       DateTime
+
+  @@index([fortressId])
+  @@map("build_queue")
 }
 
 model GameEvent {
