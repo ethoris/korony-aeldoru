@@ -1,26 +1,86 @@
 @import "tailwindcss";
 
+/* Tokeny z docs/gdd/14-wyglad.md. Domyślnie tryb ciemny; [data-theme="light"]
+   na <html> włącza "pergamin" (przełącznik w Ustawieniach konta, później). */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-background: #14110f;
+  --color-card: #231e19;
+  --color-line: #3d342b;
+  --color-foreground: #ede4d3;
+  --color-muted: #a89b87;
+  --color-accent: #d4af37;
+  --color-danger: #e0644b;
+  --color-success: #6fa35a;
+  --color-info: #5e95c9;
+
+  --color-rarity-common: #b9b2a5;
+  --color-rarity-magic: #6a9bf0;
+  --color-rarity-rare: #e8be48;
+  --color-rarity-legendary: #ee8a3a;
+  --color-rarity-set: #5cc27a;
+  --color-rarity-unique: #c77de6;
+
+  --color-element-physical: #a89b87;
+  --color-element-fire: #e0603a;
+  --color-element-ice: #6ec3e8;
+  --color-element-lightning: #d9c84a;
+  --color-element-light: #f2e4a5;
+  --color-element-shadow: #9a82c4;
+  --color-element-poison: #7db34a;
+}
+
+:root[data-theme="light"] {
+  --color-background: #f4ecdd;
+  --color-card: #fbf7ef;
+  --color-line: #d8cbb4;
+  --color-foreground: #2b2118;
+  --color-muted: #6b5b47;
+  --color-accent: #8a6510;
+  --color-danger: #a3311f;
+  --color-success: #276b3b;
+  --color-info: #2f5fb8;
+
+  --color-rarity-common: #6b6459;
+  --color-rarity-magic: #2f5fb8;
+  --color-rarity-rare: #8a6510;
+  --color-rarity-legendary: #a8510f;
+  --color-rarity-set: #276b3b;
+  --color-rarity-unique: #7e3ba6;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-background: var(--color-background);
+  --color-card: var(--color-card);
+  --color-line: var(--color-line);
+  --color-foreground: var(--color-foreground);
+  --color-muted: var(--color-muted);
+  --color-accent: var(--color-accent);
+  --color-danger: var(--color-danger);
+  --color-success: var(--color-success);
+  --color-info: var(--color-info);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-rarity-common: var(--color-rarity-common);
+  --color-rarity-magic: var(--color-rarity-magic);
+  --color-rarity-rare: var(--color-rarity-rare);
+  --color-rarity-legendary: var(--color-rarity-legendary);
+  --color-rarity-set: var(--color-rarity-set);
+  --color-rarity-unique: var(--color-rarity-unique);
+
+  --color-element-physical: var(--color-element-physical);
+  --color-element-fire: var(--color-element-fire);
+  --color-element-ice: var(--color-element-ice);
+  --color-element-lightning: var(--color-element-lightning);
+  --color-element-light: var(--color-element-light);
+  --color-element-shadow: var(--color-element-shadow);
+  --color-element-poison: var(--color-element-poison);
+
+  /* docs/gdd/14-wyglad.md: Cinzel (nagłówki), Crimson Pro (raporty/fabuła), Inter (UI) */
+  --font-display: var(--font-cinzel);
+  --font-body: var(--font-crimson);
+  --font-ui: var(--font-inter);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-background);
+  color: var(--color-foreground);
 }
