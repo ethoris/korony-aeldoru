@@ -40,6 +40,10 @@ interface OwnedPotion {
 const ZONE_NAMES: Record<string, string> = {
   "szepczacy-las": "Szepczący Las (poziomy 1–10)",
   "bagna-mglistej-wiezy": "Bagna Mglistej Wieży (poziomy 11–25)",
+  "szczyty-zelaznych-gor": "Szczyty Żelaznych Gór (poziomy 26–45)",
+  "ruiny-starego-imperium": "Ruiny Starego Imperium (poziomy 46–70)",
+  "smocze-pustkowia": "Smocze Pustkowia (poziomy 71–100)",
+  "otchlan-peknietej-korony": "Otchłań Pękniętej Korony (poziomy 101–120)",
 };
 
 const KIND_ORDER: Array<"SCOUT" | "HUNT" | "DEEP"> = ["SCOUT", "HUNT", "DEEP"];

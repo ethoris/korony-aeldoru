@@ -172,8 +172,17 @@ export async function progressLocationQuests(
     if (quest.special?.active && quest.special.key === "STAMINA_30") {
       staminaBonus = 30;
     }
-    if (quest.special?.active && quest.special.key === "GOLD_BONUS" && quest.key === "ksiega-zaklec") {
-      goldBonus += 300;
+    if (quest.special?.active && quest.special.key === "GOLD_BONUS") {
+      goldBonus += quest.special.amount ?? 0;
+    }
+
+    if (quest.titleReward) {
+      await tx.characterTitle.upsert({
+        where: { characterId_titleKey: { characterId: params.characterId, titleKey: quest.titleReward.key } },
+        create: { characterId: params.characterId, titleKey: quest.titleReward.key, active: false },
+        update: {},
+      });
+      chapterRewardTitle = quest.titleReward.name;
     }
 
     if (quest.isChapterFinale) {
