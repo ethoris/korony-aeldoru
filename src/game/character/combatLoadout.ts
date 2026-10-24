@@ -56,6 +56,7 @@ export function buildHeroConfigFromEquipment(params: {
   spellElement?: Element;
   startingHpOverride?: number;
   equippedItems: EquippedItemSummary[];
+  selectedAbilities?: string[];
 }): HeroConfig {
   const weapon = params.equippedItems.find((i) => i.slot === "WEAPON");
   const weaponDamage =
@@ -102,5 +103,6 @@ export function buildHeroConfigFromEquipment(params: {
     hasShield,
     startingHpOverride: params.startingHpOverride,
     bonusMaxHp,
+    selectedAbilities: params.selectedAbilities,
   };
 }

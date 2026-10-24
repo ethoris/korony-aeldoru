@@ -2,9 +2,10 @@ import "server-only";
 
 import { buildHeroConfigFromEquipment } from "@/game/character/combatLoadout";
 import type { EquippedItemSummary } from "@/game/character/combatLoadout";
+import { validateAbilitySelection } from "@/game/character/abilitySelection";
 import { applyExperience } from "@/game/character/experience";
 import { MAX_STAMINA, regenerateStamina } from "@/game/character/stamina";
-import type { ExpeditionKind, Tactic } from "@/game/combat/types";
+import type { Element, ExpeditionKind, Tactic } from "@/game/combat/types";
 import { generateReport } from "@/game/combat/generateReport";
 import { EXPEDITION_KINDS } from "@/game/data/expeditionKinds";
 import { getLocation, LOCATIONS } from "@/game/data/locations";
@@ -71,12 +72,19 @@ export async function startExpedition(
   locationKey: string,
   kind: ExpeditionKind,
   tactic: Tactic,
+  selectedAbilities: string[] = [],
+  spellElement: Element | null = null,
 ): Promise<StartExpeditionError | { expeditionId: string; endAt: Date }> {
   const character = await prisma.character.findUniqueOrThrow({ where: { id: characterId } });
   const now = new Date();
 
   if (character.injuredUntil && character.injuredUntil > now) {
     return { error: "Jesteś ranny i nie możesz ruszyć na wyprawę." };
+  }
+
+  const abilityValidation = validateAbilitySelection(character.class, character.level, selectedAbilities);
+  if (!abilityValidation.ok) {
+    return { error: abilityValidation.error };
   }
 
   const activeExpedition = await prisma.expedition.findFirst({
@@ -138,14 +146,24 @@ export async function startExpedition(
     });
 
     const created = await tx.expedition.create({
-      data: { characterId, locationKey, kind, tactic, seed, startAt: now, endAt },
+      data: {
+        characterId,
+        locationKey,
+        kind,
+        tactic,
+        seed,
+        startAt: now,
+        endAt,
+        abilities: abilityValidation.selected,
+        spellElement: character.class === "MAGE" ? spellElement ?? "fire" : null,
+      },
     });
 
     await tx.gameEvent.create({
       data: {
         characterId,
         type: "wyprawa: start",
-        details: { location: locationKey, kind, tactic },
+        details: { location: locationKey, kind, tactic, abilities: abilityValidation.selected },
       },
     });
 
@@ -164,6 +182,8 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
     const character = await tx.character.findUniqueOrThrow({ where: { id: expedition.characterId } });
     const location = getLocation(expedition.locationKey);
     const equippedItems = await loadEquippedItems(tx, character.id);
+    const selectedAbilities = (expedition.abilities as unknown as string[]) ?? [];
+    const spellElement = expedition.spellElement as Element | null;
 
     const resolution = resolveExpedition({
       classKey: character.class,
@@ -181,6 +201,8 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       startingGoldPouch: character.goldPouch,
       fightsSinceRareDrop: character.fightsSinceRareDrop,
       equippedItems,
+      selectedAbilities,
+      spellElement: spellElement ?? undefined,
     });
 
     const afterBattleLevel = applyExperience(character.level, character.experience, character.race, resolution.totalXp);
@@ -264,7 +286,9 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
         intellect: character.intellect,
       },
       tactic: expedition.tactic,
+      spellElement: spellElement ?? undefined,
       equippedItems,
+      selectedAbilities,
     });
 
     const allLines: string[][] = [];

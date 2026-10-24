@@ -11,16 +11,19 @@ import type { ClassKey, MonsterConfig } from "../types";
  * Powtórka symulacji balansu z docs/gdd/15-balans.md: 300 walk na klasę i
  * poziom przeciwnika (bossa tego poziomu), bohater z 2 punktami/poziom w
  * statystykę główną i 1 w WYT, magiczny ekwipunek swojego poziomu, bez
- * zdolności/mikstur/zestawów (te dodadzą ok. 15–25% – GDD).
+ * mikstur/zestawów.
  *
  * WAŻNE: tabela w 15-balans.md powstała z testu BEZ kolumny „Cechy klas po
  * teście” z 02-systemy-walki.md (blok Paladyna, leczenie Kapłana, Mag
- * ignorujący obronę, 2 ataki Łotra, darmowy strzał Łucznika) – GDD mówi to
- * wprost: „Zdolności nie były jeszcze uwzględnione w teście balansu […]
- * sprawdzimy to w drugiej symulacji po zakodowaniu silnika walki.” Ten plik
- * JEST tą drugą symulacją: silnik liczy te cechy, więc różnice względem
- * starej tabeli (patrz log w konsoli) to sygnał balansu dla Patryka, a nie
- * błąd – CLAUDE.md zakazuje samodzielnie zmieniać liczby balansu z GDD.
+ * ignorujący obronę, 2 ataki Łotra, darmowy strzał Łucznika) i BEZ "Zdolności
+ * klas" (automatyczna zdolność z poziomu 1 działa tu dla każdego bohatera,
+ * nawet bez wyboru gracza – GDD mówi to wprost: „Zdolności nie były jeszcze
+ * uwzględnione w teście balansu […] sprawdzimy to w drugiej symulacji po
+ * zakodowaniu silnika walki.” Ten plik JEST tą drugą symulacją: silnik liczy
+ * cechy i zdolność z poziomu 1, więc różnice względem starej tabeli (patrz
+ * log w konsoli) to sygnał balansu dla Patryka, a nie błąd – CLAUDE.md
+ * zakazuje samodzielnie zmieniać liczby balansu z GDD. Krok 8 pokazał
+ * znacznie większe różnice niż szacowane w GDD (+15–25%) – do przeglądu.
  */
 
 const LEVELS = [10, 30, 50, 80, 120] as const;

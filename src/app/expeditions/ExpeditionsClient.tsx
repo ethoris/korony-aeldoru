@@ -24,12 +24,33 @@ interface ActiveExpedition {
   endAt: string;
 }
 
+interface SelectableAbility {
+  key: string;
+  name: string;
+  effectText: string;
+}
+
 const ZONE_NAMES: Record<string, string> = {
   "szepczacy-las": "Szepczący Las (poziomy 1–10)",
   "bagna-mglistej-wiezy": "Bagna Mglistej Wieży (poziomy 11–25)",
 };
 
 const KIND_ORDER: Array<"SCOUT" | "HUNT" | "DEEP"> = ["SCOUT", "HUNT", "DEEP"];
+
+const TACTICS: Array<{ key: "AGGRESSIVE" | "BALANCED" | "DEFENSIVE" | "RETREAT_30"; label: string }> = [
+  { key: "AGGRESSIVE", label: "Natarcie" },
+  { key: "BALANCED", label: "Wyważona" },
+  { key: "DEFENSIVE", label: "Obrona" },
+  { key: "RETREAT_30", label: "Odwrót < 30% PŻ" },
+];
+
+const SPELL_ELEMENTS: Array<{ key: "fire" | "ice" | "lightning"; label: string }> = [
+  { key: "fire", label: "Ogień" },
+  { key: "ice", label: "Lód" },
+  { key: "lightning", label: "Błyskawica" },
+];
+
+const MAX_SELECTED_ABILITIES = 3;
 
 function formatCountdown(ms: number): string {
   if (ms <= 0) return "0:00";
@@ -41,12 +62,14 @@ function formatCountdown(ms: number): string {
 
 export function ExpeditionsClient({
   character,
+  selectableAbilities,
   activeExpedition,
   locations,
   kinds,
   lastReport,
 }: {
-  character: { level: number; stamina: number; injuredUntil: string | null };
+  character: { level: number; stamina: number; injuredUntil: string | null; classKey: string };
+  selectableAbilities: SelectableAbility[];
   activeExpedition: ActiveExpedition | null;
   locations: LocationSummary[];
   kinds: Record<string, ExpeditionKindDefinition>;
@@ -56,6 +79,17 @@ export function ExpeditionsClient({
   const [error, setError] = useState<string | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [remainingMs, setRemainingMs] = useState<number>(0);
+  const [tactic, setTactic] = useState<(typeof TACTICS)[number]["key"]>("BALANCED");
+  const [spellElement, setSpellElement] = useState<(typeof SPELL_ELEMENTS)[number]["key"]>("fire");
+  const [selectedAbilities, setSelectedAbilities] = useState<string[]>([]);
+
+  function toggleAbility(key: string) {
+    setSelectedAbilities((prev) => {
+      if (prev.includes(key)) return prev.filter((k) => k !== key);
+      if (prev.length >= MAX_SELECTED_ABILITIES) return prev;
+      return [...prev, key];
+    });
+  }
 
   useEffect(() => {
     if (!activeExpedition) return;
@@ -85,7 +119,13 @@ export function ExpeditionsClient({
     const response = await fetch("/api/expeditions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ locationKey, kind, tactic: "BALANCED" }),
+      body: JSON.stringify({
+        locationKey,
+        kind,
+        tactic,
+        abilities: selectedAbilities,
+        spellElement: character.classKey === "MAGE" ? spellElement : undefined,
+      }),
     });
     const data = await response.json().catch(() => ({}));
     setPendingKey(null);
@@ -150,6 +190,78 @@ export function ExpeditionsClient({
       ) : (
         <>
           {error && <p className="text-sm text-danger">{error}</p>}
+
+          <div className="rounded-lg border border-line bg-card p-5">
+            <h2 className="font-display text-base font-bold text-foreground">Przed wyprawą</h2>
+
+            <p className="mt-3 text-sm text-muted">Taktyka</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {TACTICS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTactic(t.key)}
+                  className={`rounded border px-3 py-2 text-sm ${
+                    tactic === t.key ? "border-accent text-accent" : "border-line text-foreground"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {character.classKey === "MAGE" && (
+              <>
+                <p className="mt-4 text-sm text-muted">Żywioł zaklęć</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {SPELL_ELEMENTS.map((el) => (
+                    <button
+                      key={el.key}
+                      type="button"
+                      onClick={() => setSpellElement(el.key)}
+                      className={`rounded border px-3 py-2 text-sm ${
+                        spellElement === el.key ? "border-accent text-accent" : "border-line text-foreground"
+                      }`}
+                    >
+                      {el.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {selectableAbilities.length > 0 && (
+              <>
+                <p className="mt-4 text-sm text-muted">
+                  Zdolności (do {MAX_SELECTED_ABILITIES}) — {selectedAbilities.length}/{MAX_SELECTED_ABILITIES}
+                </p>
+                <div className="mt-2 flex flex-col gap-2">
+                  {selectableAbilities.map((ability) => {
+                    const checked = selectedAbilities.includes(ability.key);
+                    const disabled = !checked && selectedAbilities.length >= MAX_SELECTED_ABILITIES;
+                    return (
+                      <label
+                        key={ability.key}
+                        className={`flex items-start gap-2 text-sm ${disabled ? "opacity-40" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={() => toggleAbility(ability.key)}
+                          className="mt-1"
+                        />
+                        <span>
+                          <span className="text-foreground">{ability.name}</span>{" "}
+                          <span className="text-muted">— {ability.effectText}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
 
           {zones.map((zoneKey) => (
             <div key={zoneKey} className="flex flex-col gap-4">

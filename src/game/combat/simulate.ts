@@ -1,5 +1,6 @@
 import { CLASSES } from "@/game/data/classes";
 
+import { AbilityRuntime } from "./abilityEngine";
 import {
   CRIT_MULTIPLIER,
   attackPower,
@@ -52,19 +53,23 @@ function resolveAttack(
     element: Element;
     weakTo: readonly Element[];
     resistTo: readonly Element[];
+    forceHit?: boolean;
+    forceCrit?: boolean;
+    ignoreResist?: boolean;
   },
 ): AttackResolution {
   const dexAdv = dexterityAdvantage(params.attackerDex, params.defenderDex, params.attackerLevel, params.defenderLevel);
   const chance = hitChance(params.attackerLevel, params.defenderLevel, dexAdv);
-  const hit = rollChance(rng, chance);
+  const hit = params.forceHit ? true : rollChance(rng, chance);
 
   if (!hit) {
     return { hit: false, crit: false, damage: 0, element: params.element, weakHit: false, resistHit: false };
   }
 
-  const crit = rollChance(rng, critChance(params.attackerDex, params.attackerLevel));
+  const crit = params.forceCrit ? true : rollChance(rng, critChance(params.attackerDex, params.attackerLevel));
   const reduction = params.ignoreDefense ? 0 : damageReduction(params.defenseValue, params.attackerLevel);
-  const elementMult = elementMultiplier(params.element, params.weakTo as Element[], params.resistTo as Element[]);
+  let elementMult = elementMultiplier(params.element, params.weakTo as Element[], params.resistTo as Element[]);
+  if (params.ignoreResist && elementMult < 1) elementMult = 1;
   const variance = randomRange(rng, 0.85, 1.15);
 
   const raw = params.attackPowerValue * variance * (1 - reduction) * elementMult * (crit ? CRIT_MULTIPLIER : 1);
@@ -84,6 +89,7 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
   const rng = createRng(seed);
   const classDef = CLASSES[hero.classKey];
   const tactic = hero.tactic ?? "BALANCED";
+  const abilities = new AbilityRuntime(hero.classKey, hero.level, hero.selectedAbilities ?? []);
 
   const atkTacticMult = tactic === "AGGRESSIVE" ? 1.15 : tactic === "DEFENSIVE" ? 0.85 : 1;
   const defTacticMult = tactic === "AGGRESSIVE" ? 0.85 : tactic === "DEFENSIVE" ? 1.15 : 1;
@@ -111,22 +117,40 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
 
   const heroElement: Element = hero.classKey === "MAGE" ? hero.spellElement ?? "fire" : "physical";
 
-  function heroAttacks(turn: number, attackIndex: number): BattleResult | null {
+  function pushStatus(turn: number, actor: CombatSide, text: string, targetHpAfter?: number): void {
+    events.push({ kind: "status", turn, actor, text, targetHpAfter });
+  }
+
+  function heroAttacks(turn: number, attackIndex: number, multiplier: number, overrides: {
+    element?: Element;
+    ignoreDefense?: boolean;
+    defensePierce?: number;
+    ignoreResist?: boolean;
+    forceHit?: boolean;
+    forceCrit?: boolean;
+  } = {}): BattleResult | null {
+    const buff = abilities.attackPowerMultiplier();
+    const effectiveDefense = monsterDef * (1 - (overrides.defensePierce ?? 0));
+
     const resolution = resolveAttack(rng, {
       attackerLevel: hero.level,
       attackerDex: heroDex,
       defenderLevel: monster.level,
       defenderDex: monsterDex,
-      attackPowerValue: heroAttackPower,
-      defenseValue: monsterDef,
-      ignoreDefense: hero.classKey === "MAGE",
-      element: heroElement,
+      attackPowerValue: heroAttackPower * multiplier * buff.mult,
+      defenseValue: effectiveDefense,
+      ignoreDefense: Boolean(overrides.ignoreDefense) || hero.classKey === "MAGE",
+      element: overrides.element ?? buff.element ?? heroElement,
       weakTo: monster.weakTo,
       resistTo: monster.resistTo,
+      forceHit: overrides.forceHit,
+      forceCrit: overrides.forceCrit,
+      ignoreResist: overrides.ignoreResist,
     });
 
     if (resolution.hit) {
       monsterHp = Math.max(0, monsterHp - resolution.damage);
+      abilities.onHeroHitLands();
     }
 
     const event: AttackEvent = {
@@ -150,6 +174,12 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
   }
 
   function monsterAttacks(turn: number): BattleResult | null {
+    const skipLine = abilities.monsterSkipsTurn();
+    if (skipLine) {
+      pushStatus(turn, "monster", skipLine);
+      return null;
+    }
+
     const resolution = resolveAttack(rng, {
       attackerLevel: monster.level,
       attackerDex: monsterDex,
@@ -163,8 +193,24 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
       resistTo: [],
     });
 
-    const blocked = Boolean(hero.hasShield) && resolution.hit && rollChance(rng, 0.15);
-    const damage = blocked ? 0 : resolution.hit ? resolution.damage : 0;
+    const blockChance = (hero.hasShield ? 0.15 : 0) + abilities.extraBlockChance();
+    const blocked = blockChance > 0 && resolution.hit && rollChance(rng, blockChance);
+    const dodged = !blocked && resolution.hit && abilities.rollExtraDodge(rng);
+
+    let damage = blocked || dodged ? 0 : resolution.hit ? resolution.damage : 0;
+    let absorbStatus: string | null = null;
+
+    if (damage > 0) {
+      const { reductionPct } = abilities.incomingDamageModifiers(monster.type);
+      damage *= 1 - reductionPct;
+      const absorbed = abilities.absorbDamage(damage);
+      damage = absorbed.damage;
+      absorbStatus = absorbed.statusLine;
+    }
+
+    if (resolution.hit && !blocked && !dodged) {
+      abilities.onHeroHitByMonster();
+    }
 
     if (damage > 0) {
       heroHp = Math.max(0, heroHp - damage);
@@ -175,7 +221,7 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
       turn,
       actor: "monster",
       attackIndex: 0,
-      hit: resolution.hit,
+      hit: resolution.hit && !dodged,
       crit: resolution.crit,
       blocked,
       damage,
@@ -185,7 +231,16 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
       targetHpAfter: heroHp,
     });
 
-    if (heroHp <= 0) return "LOSE";
+    if (absorbStatus) pushStatus(turn, "hero", absorbStatus, heroHp);
+
+    if (heroHp <= 0) {
+      if (abilities.tryResurrect()) {
+        heroHp = Math.round(heroMaxHpValue * 0.3);
+        pushStatus(turn, "hero", "Bohater wraca do życia dzięki Wskrzeszeniu!", heroHp);
+      } else {
+        return "LOSE";
+      }
+    }
 
     if (hero.classKey === "PALADIN" && !paladinHealUsed && heroHp / heroMaxHpValue < 0.4) {
       const healAmount = Math.min(heroMaxHpValue - heroHp, heroMaxHpValue * 0.2);
@@ -213,7 +268,7 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
 
   // Łucznik: 1 darmowy strzał przed walką, poza limitem tur.
   if (hero.classKey === "ARCHER") {
-    const outcome = heroAttacks(0, 0);
+    const outcome = heroAttacks(0, 0, 1);
     if (outcome === "WIN") {
       return finish("WIN", 0);
     }
@@ -222,6 +277,10 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
   const heroInit = initiative(heroDex, randomInt(rng, 1, 10));
   const monsterInit = initiative(monsterDex, randomInt(rng, 1, 10));
   const heroGoesFirst = heroInit >= monsterInit;
+
+  for (const line of abilities.onBattleStart(heroGoesFirst)) {
+    pushStatus(1, "hero", line);
+  }
 
   let result: BattleResult | null = null;
   let turnsTaken = 0;
@@ -232,14 +291,65 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
 
     for (const side of order) {
       if (side === "hero") {
-        for (let i = 0; i < classDef.attacksPerTurn; i++) {
-          const outcome = heroAttacks(turn, i);
-          if (outcome) {
-            result = outcome;
-            break;
+        const hotPercent = abilities.tickHeroHots();
+        if (hotPercent > 0 && heroHp < heroMaxHpValue) {
+          const healAmount = Math.min(heroMaxHpValue - heroHp, heroMaxHpValue * hotPercent);
+          if (healAmount > 0) {
+            heroHp += healAmount;
+            events.push({ kind: "heal", turn, actor: "hero", amount: healAmount, targetHpAfter: heroHp });
           }
         }
+
+        const support = abilities.planHeroSupportPhase({ heroHpFrac: heroHp / heroMaxHpValue });
+        for (const line of support.statusLines) pushStatus(turn, "hero", line);
+        if (support.shieldGainPercent > 0) abilities.gainManaShield(support.shieldGainPercent, heroMaxHpValue);
+
+        const plan = abilities.planHeroAttack(
+          {
+            monsterHpFrac: monsterHp / monsterMaxHpValue,
+            monsterIsBoss: monster.isBoss,
+            monsterType: monster.type,
+            heroElement,
+          },
+          rng,
+        );
+
+        if (plan.kind === "instantKill") {
+          monsterHp = 0;
+          pushStatus(turn, "hero", "Egzekucja! Wróg pada od razu.", 0);
+          result = "WIN";
+        } else if (plan.kind === "override") {
+          if (plan.statusBefore) pushStatus(turn, "hero", plan.statusBefore);
+          for (let i = 0; i < plan.hits.length; i++) {
+            const hit = plan.hits[i];
+            const outcome = heroAttacks(turn, i, hit.multiplier, hit);
+            if (outcome) {
+              result = outcome;
+              break;
+            }
+          }
+        } else {
+          for (let i = 0; i < classDef.attacksPerTurn; i++) {
+            const outcome = heroAttacks(turn, i, 1);
+            if (outcome) {
+              result = outcome;
+              break;
+            }
+          }
+        }
+
+        if (!result) {
+          const dotTick = abilities.tickMonsterDots();
+          if (dotTick.totalPercent > 0) {
+            const dmg = dotTick.totalPercent * monsterMaxHpValue;
+            monsterHp = Math.max(0, monsterHp - dmg);
+            if (dotTick.statusLine) pushStatus(turn, "hero", dotTick.statusLine, monsterHp);
+            if (monsterHp <= 0) result = "WIN";
+          }
+        }
+
         if (!result) priestSelfHeal(turn);
+        abilities.endOfTurnTick();
       } else {
         const outcome = monsterAttacks(turn);
         if (outcome) result = outcome;

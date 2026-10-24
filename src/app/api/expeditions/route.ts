@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
-import type { ExpeditionKind, Tactic } from "@/game/combat/types";
+import type { Element, ExpeditionKind, Tactic } from "@/game/combat/types";
 import { getCharacterForUser, startExpedition, syncCharacter } from "@/lib/expeditions";
 
 const VALID_KINDS: ExpeditionKind[] = ["SCOUT", "HUNT", "DEEP", "BOSS"];
 const VALID_TACTICS: Tactic[] = ["AGGRESSIVE", "BALANCED", "DEFENSIVE", "RETREAT_30"];
+const VALID_SPELL_ELEMENTS: Element[] = ["fire", "ice", "lightning"];
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Nieprawidłowe dane." }, { status: 400 });
   }
 
-  const { locationKey, kind, tactic } = body as Record<string, unknown>;
+  const { locationKey, kind, tactic, abilities, spellElement } = body as Record<string, unknown>;
 
   if (typeof locationKey !== "string") {
     return NextResponse.json({ error: "Wybierz lokację." }, { status: 400 });
@@ -37,7 +38,20 @@ export async function POST(request: Request) {
   const resolvedTactic: Tactic =
     typeof tactic === "string" && VALID_TACTICS.includes(tactic as Tactic) ? (tactic as Tactic) : "BALANCED";
 
-  const result = await startExpedition(character.id, locationKey, kind as ExpeditionKind, resolvedTactic);
+  const selectedAbilities = Array.isArray(abilities) ? abilities.filter((a): a is string => typeof a === "string") : [];
+  const resolvedSpellElement: Element | null =
+    typeof spellElement === "string" && VALID_SPELL_ELEMENTS.includes(spellElement as Element)
+      ? (spellElement as Element)
+      : null;
+
+  const result = await startExpedition(
+    character.id,
+    locationKey,
+    kind as ExpeditionKind,
+    resolvedTactic,
+    selectedAbilities,
+    resolvedSpellElement,
+  );
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }

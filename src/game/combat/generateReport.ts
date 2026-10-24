@@ -50,6 +50,11 @@ export function generateReport(outcome: BattleOutcome, ctx: ReportContext, seed:
       continue;
     }
 
+    if (event.kind === "status") {
+      builder.pushLiteral(event.text);
+      continue;
+    }
+
     if (event.actor === "hero") {
       if (event.blocked) continue; // bohater nie blokuje własnych ciosów
       if (!event.hit) {

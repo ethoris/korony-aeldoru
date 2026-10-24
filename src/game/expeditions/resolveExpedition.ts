@@ -2,7 +2,7 @@ import { buildHeroConfigFromEquipment } from "@/game/character/combatLoadout";
 import type { EquippedItemSummary } from "@/game/character/combatLoadout";
 import { createRng, randomInt } from "@/game/combat/rng";
 import { simulateBattle } from "@/game/combat/simulate";
-import type { BattleOutcome, BattleResult, ClassKey, ExpeditionKind, MonsterConfig, Stats, Tactic } from "@/game/combat/types";
+import type { BattleOutcome, BattleResult, ClassKey, Element, ExpeditionKind, MonsterConfig, Stats, Tactic } from "@/game/combat/types";
 import { EXPEDITION_KINDS } from "@/game/data/expeditionKinds";
 import type { LocationDefinition } from "@/game/data/locations";
 import { getMonster } from "@/game/data/monsters";
@@ -41,6 +41,8 @@ export interface ResolveExpeditionParams {
   startingGoldPouch: number;
   fightsSinceRareDrop: number;
   equippedItems: EquippedItemSummary[];
+  selectedAbilities?: string[];
+  spellElement?: Element;
 }
 
 function toMonsterConfig(key: string): MonsterConfig {
@@ -65,7 +67,9 @@ export function resolveExpedition(params: ResolveExpeditionParams): ExpeditionRe
     level: params.level,
     stats: params.stats,
     tactic: params.tactic,
+    spellElement: params.spellElement,
     equippedItems: params.equippedItems,
+    selectedAbilities: params.selectedAbilities,
   });
 
   const fights: FightOutcome[] = [];

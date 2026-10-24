@@ -46,6 +46,11 @@ export interface HeroConfig {
   startingHpOverride?: number;
   /** Dodatkowe PŻ z cechy +PŻ na ekwipunku (docs/gdd/08-ekwipunek.md). */
   bonusMaxHp?: number;
+  /**
+   * Do 3 wybranych zdolności (docs/gdd/02-systemy-walki.md, "Zdolności
+   * klas"); zdolność z poziomu 1 jest dodawana automatycznie przez silnik.
+   */
+  selectedAbilities?: string[];
 }
 
 export interface MonsterConfig {
@@ -85,7 +90,15 @@ export interface HealEvent {
   targetHpAfter: number;
 }
 
-export type BattleEvent = AttackEvent | HealEvent;
+export interface StatusEvent {
+  kind: "status";
+  turn: number;
+  actor: CombatSide;
+  text: string;
+  targetHpAfter?: number;
+}
+
+export type BattleEvent = AttackEvent | HealEvent | StatusEvent;
 
 export interface BattleOutcome {
   result: BattleResult;

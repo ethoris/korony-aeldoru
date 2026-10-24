@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { selectableAbilityKeys } from "@/game/character/abilitySelection";
+import { abilitiesForClass } from "@/game/data/abilities";
 import { EXPEDITION_KINDS } from "@/game/data/expeditionKinds";
 import { LOCATIONS } from "@/game/data/locations";
 import { getMonster } from "@/game/data/monsters";
@@ -39,6 +41,11 @@ export default async function ExpeditionsPage() {
     bossLevel: location.bossKey ? getMonster(location.bossKey).level : null,
   }));
 
+  const unlockedKeys = new Set(selectableAbilityKeys(fresh.class, fresh.level));
+  const selectableAbilities = abilitiesForClass(fresh.class)
+    .filter((a) => unlockedKeys.has(a.key))
+    .map((a) => ({ key: a.key, name: a.name, effectText: a.effectText }));
+
   return (
     <main className="flex flex-1 justify-center p-4">
       <ExpeditionsClient
@@ -46,7 +53,9 @@ export default async function ExpeditionsPage() {
           level: fresh.level,
           stamina: fresh.stamina,
           injuredUntil: fresh.injuredUntil?.toISOString() ?? null,
+          classKey: fresh.class,
         }}
+        selectableAbilities={selectableAbilities}
         activeExpedition={
           activeExpedition
             ? { locationKey: activeExpedition.locationKey, kind: activeExpedition.kind, endAt: activeExpedition.endAt.toISOString() }

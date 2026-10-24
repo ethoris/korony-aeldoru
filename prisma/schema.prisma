@@ -247,6 +247,7 @@ model Expedition {
   kind        ExpeditionKind
   tactic      Tactic         @default(BALANCED)
   abilities   Json           @default("[]") // do 3 wybranych kluczy zdolności
+  spellElement String?       // żywioł zaklęć Maga (fire/ice/lightning) na tę wyprawę
   potions     Json           @default("[]")
   // Ziarno walk tej wyprawy – zapisane przy starcie, żeby rozliczenie
   // przy wejściu (bez procesów w tle) dało zawsze ten sam wynik.
