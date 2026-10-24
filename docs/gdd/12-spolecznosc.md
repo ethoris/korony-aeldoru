@@ -13,7 +13,7 @@ Nowy gracz ma w 10 minut zrozumieć pętlę gry: wyprawa, raport, łup, rozwój.
 7. **Wytrwałość i czas**: wyjaśnienie, że wyprawy trwają i warto wrócić później; propozycja powiadomień.
 8. **Pierwszy boss** (Szczerbaty Krul) jako cel na pierwsze dni; od poziomu 5 podpowiedź o twierdzy.
 
-Przez pierwsze 24 h wyprawy w Szepczącym Lesie trwają o połowę krócej, a przez 7 dni gracz ma ochronę przed atakami innych graczy.
+Przez pierwsze 24 h wyprawy w Szepczącym Lesie trwają o połowę krócej (nieaktualne od zmiany czasu wyprawy na 0 min — zob. docs/gdd/05-lokacje.md, bonus jest teraz zawsze bez efektu), a przez 7 dni od utworzenia bohatera gracz ma ochronę przed pojedynkami PvP od innych graczy (osobno od 7 dni ochrony twierdzy po jej założeniu, docs/gdd/09-twierdza-i-wojna.md).
 
 ## Czat i moderacja
 

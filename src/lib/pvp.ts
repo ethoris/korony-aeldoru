@@ -7,6 +7,7 @@ import { simulatePvpDuel } from "@/game/combat/duel";
 import { generatePvpReport } from "@/game/combat/generatePvpReport";
 import type { BattleResult, Tactic } from "@/game/combat/types";
 import type { ItemAffixInstance } from "@/game/items/types";
+import { NEW_PLAYER_PROTECTION_DAYS, isNewPlayerProtected, protectionEndsAt } from "@/game/character/newPlayerProtection";
 import { fameDelta } from "@/game/pvp/fame";
 
 import { checkDeityQuests, recordPvpWinSignal } from "./deityQuests";
@@ -73,6 +74,7 @@ export async function listOpponents(characterId: string): Promise<OpponentView[]
       id: { not: characterId },
       server: character.server,
       level: { gte: character.level - PVP_LEVEL_RANGE, lte: character.level + PVP_LEVEL_RANGE },
+      createdAt: { lt: new Date(Date.now() - NEW_PLAYER_PROTECTION_DAYS * 24 * 60 * 60 * 1000) },
     },
     orderBy: { level: "desc" },
     take: 20,
@@ -107,6 +109,9 @@ export async function attackPlayer(attackerId: string, defenderId: string, tacti
     if (defenderChar.level < PVP_UNLOCK_LEVEL) return { error: "Ten gracz nie bierze jeszcze udziału w PvP." };
     if (Math.abs(attackerChar.level - defenderChar.level) > PVP_LEVEL_RANGE) {
       return { error: `Przeciwnik musi być w zakresie ±${PVP_LEVEL_RANGE} poziomów.` };
+    }
+    if (isNewPlayerProtected(defenderChar.createdAt)) {
+      return { error: `Ten gracz ma ochronę nowego konta do ${protectionEndsAt(defenderChar.createdAt).toLocaleString("pl-PL")}.` };
     }
     if (attackerChar.injuredUntil && attackerChar.injuredUntil > new Date()) {
       return { error: "Jesteś ranny i nie możesz atakować." };
