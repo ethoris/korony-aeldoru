@@ -182,6 +182,9 @@ export function CharacterStatsPanel({ character }: { character: CharacterData })
           <Link href="/ranking" className="rounded border border-line px-4 py-2 text-sm text-foreground">
             Ranking
           </Link>
+          <Link href="/quests" className="rounded border border-line px-4 py-2 text-sm text-foreground">
+            Zadania
+          </Link>
         </div>
       </div>
 

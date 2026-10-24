@@ -11,6 +11,7 @@ import { getLocation, LOCATIONS } from "@/game/data/locations";
 import { getMonster } from "@/game/data/monsters";
 import { resolveExpedition } from "@/game/expeditions/resolveExpedition";
 import type { ItemAffixInstance } from "@/game/items/types";
+import { isLocationUnlocked, progressLocationQuests } from "@/lib/quests";
 
 import { prisma } from "./prisma";
 import type { Prisma } from "@/generated/prisma/client";
@@ -91,6 +92,9 @@ export async function startExpedition(
   }
   if (character.level < location.minLevel) {
     return { error: `Ta lokacja wymaga poziomu ${location.minLevel}.` };
+  }
+  if (!(await isLocationUnlocked(prisma, characterId, locationKey))) {
+    return { error: "Najpierw ukończ zadanie fabularne poprzedniej lokacji." };
   }
 
   const isBoss = kind === "BOSS";
@@ -179,22 +183,57 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       equippedItems,
     });
 
-    const leveled = applyExperience(character.level, character.experience, character.race, resolution.totalXp);
-    const newGoldPouch = Math.max(0, character.goldPouch + resolution.totalGoldDelta);
+    const afterBattleLevel = applyExperience(character.level, character.experience, character.race, resolution.totalXp);
+    const goldAfterBattle = Math.max(0, character.goldPouch + resolution.totalGoldDelta);
     const newInjuredUntil =
       resolution.injuredMinutes > 0 ? new Date(Date.now() + resolution.injuredMinutes * 60 * 1000) : character.injuredUntil;
+
+    const winCount = resolution.fights.filter((f) => f.battle.result === "WIN").length;
+    const questRewards = await progressLocationQuests(tx, {
+      characterId: character.id,
+      characterLevel: afterBattleLevel.level,
+      characterClass: character.class,
+      locationKey: location.key,
+      expeditionKind: expedition.kind,
+      winCount,
+      bossKey: expedition.kind === "BOSS" ? (location.bossKey ?? null) : null,
+      bossResult: expedition.kind === "BOSS" ? resolution.overallResult : null,
+    });
+
+    const questXp = questRewards.reduce((sum, r) => sum + r.xpBonus, 0);
+    const questGold = questRewards.reduce((sum, r) => sum + r.goldBonus, 0);
+    const questStamina = questRewards.reduce((sum, r) => sum + r.staminaBonus, 0);
+
+    const leveled =
+      questXp > 0
+        ? applyExperience(afterBattleLevel.level, afterBattleLevel.experience, character.race, questXp)
+        : afterBattleLevel;
+    const newGoldPouch = goldAfterBattle + questGold;
+    const freePointsGained = afterBattleLevel.freePointsGained + (questXp > 0 ? leveled.freePointsGained : 0);
 
     await tx.character.update({
       where: { id: character.id },
       data: {
         level: leveled.level,
         experience: leveled.experience,
-        freePoints: character.freePoints + leveled.freePointsGained,
+        freePoints: character.freePoints + freePointsGained,
         goldPouch: newGoldPouch,
+        stamina: Math.min(MAX_STAMINA, character.stamina + questStamina),
         injuredUntil: newInjuredUntil,
         fightsSinceRareDrop: resolution.fightsSinceRareDropAfter,
       },
     });
+
+    if (questGold !== 0) {
+      await tx.goldEvent.create({
+        data: {
+          characterId: character.id,
+          amount: questGold,
+          balanceAfter: newGoldPouch,
+          reason: "zadanie ukończone",
+        },
+      });
+    }
 
     await tx.expedition.update({ where: { id: expedition.id }, data: { settled: true } });
 
@@ -209,7 +248,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       });
     }
 
-    if (leveled.levelsGained > 0) {
+    if (leveled.level > character.level) {
       await tx.gameEvent.create({
         data: { characterId: character.id, type: "awans", details: { level: leveled.level } },
       });
@@ -292,6 +331,20 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
           loot: lootSummary,
         },
       });
+    }
+
+    if (questRewards.length > 0) {
+      const questLines = questRewards.map((r) => {
+        const extras = [
+          r.lootItemName ? `przedmiot: ${r.lootItemName}` : null,
+          r.chapterRewardTitle ? `tytuł: ${r.chapterRewardTitle}` : null,
+        ].filter(Boolean);
+        return (
+          `Zadanie ukończone: ${r.title}. Zdobywasz ${r.xpBonus} PD i ${r.goldBonus} złota` +
+          (extras.length ? ` (${extras.join(", ")}).` : ".")
+        );
+      });
+      allLines.push(questLines);
     }
 
     return allLines;
