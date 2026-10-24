@@ -1,5 +1,6 @@
 import type { ClassKey } from "@/game/combat/types";
 import { CLASSES } from "./classes";
+import { tierMultiplier } from "./deityQuests";
 
 export type DeityKey = "SOLARIS" | "KORGATH" | "ILYRA" | "VEYL" | "MARDUN" | "THESSA" | "MORRAK";
 
@@ -31,7 +32,7 @@ export const DEITIES: Record<DeityKey, DeityDefinition> = {
  * - Mardun "i handlu" nie ma jeszcze żadnego mechanicznego efektu – gra nie
  *   ma jeszcze sprzedaży przedmiotów NPC ani handlu między graczami.
  */
-export function deityCombatBonuses(deity: DeityKey, classKey: ClassKey): {
+export function deityCombatBonuses(deity: DeityKey, classKey: ClassKey, grace = 0): {
   damagePercent: number;
   critPercent: number;
   hitPercent: number;
@@ -39,24 +40,26 @@ export function deityCombatBonuses(deity: DeityKey, classKey: ClassKey): {
 } {
   const weaponType = CLASSES[classKey].weaponType;
   const isMelee = weaponType !== "bow" && weaponType !== "spells";
+  const mult = tierMultiplier(grace);
 
   return {
-    damagePercent: deity === "KORGATH" && isMelee ? 5 : 0,
-    critPercent: deity === "VEYL" ? 5 : 0,
-    hitPercent: deity === "THESSA" && classKey === "ARCHER" ? 5 : 0,
-    healPercent: deity === "SOLARIS" ? 10 : 0,
+    damagePercent: deity === "KORGATH" && isMelee ? 5 * mult : 0,
+    critPercent: deity === "VEYL" ? 5 * mult : 0,
+    hitPercent: deity === "THESSA" && classKey === "ARCHER" ? 5 * mult : 0,
+    healPercent: deity === "SOLARIS" ? 10 * mult : 0,
   };
 }
 
 /** Bonus Morraka do strat po przegranej (rana i złoto przy sobie), docs/gdd/02-systemy-walki.md. */
-export function deityLossReduction(deity: DeityKey): number {
-  return deity === "MORRAK" ? 0.25 : 0;
+export function deityLossReduction(deity: DeityKey, grace = 0): number {
+  return deity === "MORRAK" ? 0.25 * tierMultiplier(grace) : 0;
 }
 
 /** +% PD/złota z wypraw (Ilyra/Mardun), docs/gdd/11-gospodarka-i-zadania.md. */
-export function deityExpeditionBonuses(deity: DeityKey): { xpPercent: number; goldPercent: number } {
+export function deityExpeditionBonuses(deity: DeityKey, grace = 0): { xpPercent: number; goldPercent: number } {
+  const mult = tierMultiplier(grace);
   return {
-    xpPercent: deity === "ILYRA" ? 10 : 0,
-    goldPercent: deity === "MARDUN" ? 10 : 0,
+    xpPercent: deity === "ILYRA" ? 10 * mult : 0,
+    goldPercent: deity === "MARDUN" ? 10 * mult : 0,
   };
 }

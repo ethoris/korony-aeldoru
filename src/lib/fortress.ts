@@ -17,6 +17,7 @@ import { settleFortress } from "@/game/fortress/settle";
 import { UNITS, UNIT_KEYS, armyLimit } from "@/game/data/units";
 import type { UnitKey } from "@/game/data/units";
 
+import { checkDeityQuests, recordUnitsTrainedSignal } from "./deityQuests";
 import { prisma } from "./prisma";
 
 import type { Prisma } from "@/generated/prisma/client";
@@ -94,6 +95,19 @@ async function loadAndSettle(tx: Prisma.TransactionClient, characterId: string, 
       await tx.army.update({
         where: { id: original.id },
         data: { quantity: row.quantity, trainingQuantity: row.trainingQuantity, trainingEndAt: row.trainingEndAt },
+      });
+    }
+  }
+  const totalTrained = armyResult.completed.reduce((sum, c) => sum + c.quantity, 0);
+  if (totalTrained > 0) {
+    await recordUnitsTrainedSignal(tx, characterId, totalTrained);
+    const character = await tx.character.findUnique({ where: { id: characterId } });
+    if (character) {
+      await checkDeityQuests(tx, characterId, character.level, character.deity, {
+        strength: character.strength,
+        dexterity: character.dexterity,
+        vitality: character.vitality,
+        intellect: character.intellect,
       });
     }
   }

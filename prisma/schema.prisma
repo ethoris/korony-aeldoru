@@ -101,6 +101,9 @@ model Character {
 
   goldPouch Int @default(0)
   fame      Int @default(1000)
+  // Łaska bóstwa (docs/gdd/11-gospodarka-i-zadania.md): 10 łask = +1 stopień
+  // bonusu bóstwa (maks. 5 stopni, +20% bazowego bonusu za stopień).
+  deityGrace Int @default(0)
 
   // Przybliżenie aktywności gracza (docs/gdd/00-glowny.md, "Za walkę z dawno
   // nieaktywnymi graczami nagroda spada do zera") – odświeżane przy wejściu

@@ -8,6 +8,7 @@ import { raidProtectionPercent } from "@/game/fortress/formulas";
 import { carryCapacity, resolveRaidBattle } from "@/game/fortress/raidBattle";
 import type { ArmyComposition } from "@/game/fortress/raidBattle";
 
+import { checkDeityQuests, recordRaidWinSignal } from "./deityQuests";
 import { prisma } from "./prisma";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -174,17 +175,27 @@ export async function settlePendingRaids(characterId: string): Promise<void> {
 
         const attackerUpdate: Partial<Record<ResourceKey, { increment: number }>> = {};
         const defenderUpdate: Partial<Record<ResourceKey, { decrement: number }>> = {};
+        let totalLooted = 0;
         for (const key of RESOURCE_KEYS) {
           const looted = Math.round(lootableByResource[key] * scale);
           if (looted > 0) {
             attackerUpdate[key] = { increment: looted };
             defenderUpdate[key] = { decrement: looted };
+            totalLooted += looted;
           }
         }
         if (Object.keys(attackerUpdate).length > 0) {
           await tx.fortress.update({ where: { characterId: fresh.attackerCharacterId }, data: attackerUpdate });
           await tx.fortress.update({ where: { characterId: fresh.defenderCharacterId }, data: defenderUpdate });
         }
+
+        await recordRaidWinSignal(tx, fresh.attackerCharacterId, totalLooted);
+        await checkDeityQuests(tx, fresh.attackerCharacterId, attackerChar.level, attackerChar.deity, {
+          strength: attackerChar.strength,
+          dexterity: attackerChar.dexterity,
+          vitality: attackerChar.vitality,
+          intellect: attackerChar.intellect,
+        });
 
         report.push(`Zwycięstwo atakującego! Zrabowano surowce, straty własne: ${Math.round(battle.winnerLossFraction * 100)}%.`);
         await tx.raid.update({ where: { id: raid.id }, data: { resolved: true, result: "ATTACKER_WIN", report } });

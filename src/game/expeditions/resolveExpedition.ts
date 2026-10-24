@@ -60,6 +60,7 @@ export interface ResolveExpeditionParams {
   selectedPotions?: string[];
   spellElement?: Element;
   deity: DeityKey;
+  deityGrace?: number;
 }
 
 function toMonsterConfig(key: string): MonsterConfig {
@@ -89,12 +90,13 @@ export function resolveExpedition(params: ResolveExpeditionParams): ExpeditionRe
     selectedAbilities: params.selectedAbilities,
     selectedPotions: params.selectedPotions,
     deity: params.deity,
+    deityGrace: params.deityGrace,
   });
 
-  const deityExpedition = deityExpeditionBonuses(params.deity);
+  const deityExpedition = deityExpeditionBonuses(params.deity, params.deityGrace ?? 0);
   const goldBonusPercent = sumGearPercent(params.equippedItems, "goldFromExpeditionsPercent") + deityExpedition.goldPercent;
   const xpBonusPercent = sumGearPercent(params.equippedItems, "experiencePercent") + deityExpedition.xpPercent;
-  const lossReduction = deityLossReduction(params.deity);
+  const lossReduction = deityLossReduction(params.deity, params.deityGrace ?? 0);
 
   const fights: FightOutcome[] = [];
   let runningGold = params.startingGoldPouch;

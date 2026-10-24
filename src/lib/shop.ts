@@ -3,6 +3,7 @@ import "server-only";
 import { MAX_STAMINA, regenerateStamina } from "@/game/character/stamina";
 import { MAX_STAMINA_POTIONS_PER_DAY, getPotion, priceFor } from "@/game/data/potions";
 
+import { checkDeityQuests, recordInjuryHealedSignal } from "./deityQuests";
 import { prisma } from "./prisma";
 
 export type ShopResult = { ok: true; goldPouch: number; quantity: number } | { error: string };
@@ -59,6 +60,13 @@ export async function consumeInstantPotion(characterId: string, potionKey: strin
       }
       await tx.character.update({ where: { id: characterId }, data: { injuredUntil: null } });
       await tx.consumable.update({ where: { id: owned.id }, data: { quantity: { decrement: 1 } } });
+      await recordInjuryHealedSignal(tx, characterId);
+      await checkDeityQuests(tx, characterId, character.level, character.deity, {
+        strength: character.strength,
+        dexterity: character.dexterity,
+        vitality: character.vitality,
+        intellect: character.intellect,
+      });
       return { ok: true, effect: "injury-cured" };
     }
 

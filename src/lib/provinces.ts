@@ -7,6 +7,7 @@ import { attackerPower, defenderPower } from "@/game/fortress/raidBattle";
 import type { ArmyComposition } from "@/game/fortress/raidBattle";
 import { nextBattleSlot } from "@/game/provinces/siegeSchedule";
 
+import { checkDeityQuests, recordSiegeWinSignal } from "./deityQuests";
 import { prisma } from "./prisma";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -75,6 +76,14 @@ async function settlePendingSieges(): Promise<void> {
           create: { provinceKey: fresh.provinceKey, ownerCharacterId: fresh.attackerCharacterId, capturedAt: new Date(), protectionUntil },
           update: { ownerCharacterId: fresh.attackerCharacterId, capturedAt: new Date(), protectionUntil },
         });
+        await recordSiegeWinSignal(tx, fresh.attackerCharacterId);
+        await checkDeityQuests(tx, fresh.attackerCharacterId, attackerChar.level, attackerChar.deity, {
+          strength: attackerChar.strength,
+          dexterity: attackerChar.dexterity,
+          vitality: attackerChar.vitality,
+          intellect: attackerChar.intellect,
+        });
+
         report.push(`Zwycięstwo atakującego! Prowincja zdobyta, straty własne: ${Math.round(winnerLossFraction * 100)}%.`);
       } else {
         // Posiłki obrońców zostały odjęte z ich armii domowej przy wysyłce

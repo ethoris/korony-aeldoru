@@ -12,6 +12,7 @@ import {
   upgradeTier,
 } from "@/game/items/upgrade";
 
+import { checkDeityQuests, recordUpgradeSuccessSignal } from "./deityQuests";
 import { getFortressView } from "./fortress";
 import { prisma } from "./prisma";
 
@@ -67,6 +68,13 @@ export async function upgradeItem(characterId: string, itemId: string): Promise<
 
     if (success) {
       await tx.item.update({ where: { id: itemId }, data: { upgrade: targetLevel, upgradeFailStreak: 0 } });
+      await recordUpgradeSuccessSignal(tx, characterId);
+      await checkDeityQuests(tx, characterId, character.level, character.deity, {
+        strength: character.strength,
+        dexterity: character.dexterity,
+        vitality: character.vitality,
+        intellect: character.intellect,
+      });
     } else {
       await tx.item.update({ where: { id: itemId }, data: { upgradeFailStreak: item.upgradeFailStreak + 1 } });
     }

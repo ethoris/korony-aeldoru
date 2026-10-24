@@ -15,6 +15,7 @@ import { getMonster } from "@/game/data/monsters";
 import { resolveExpedition } from "@/game/expeditions/resolveExpedition";
 import type { ItemAffixInstance } from "@/game/items/types";
 import { progressDailyQuests } from "@/lib/dailyQuests";
+import { checkDeityQuests, recordExpeditionDeitySignals } from "@/lib/deityQuests";
 import { progressLocationHunts } from "@/lib/hunts";
 import { isLocationUnlocked, progressLocationQuests } from "@/lib/quests";
 
@@ -242,6 +243,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       startingGoldPouch: character.goldPouch,
       fightsSinceRareDrop: character.fightsSinceRareDrop,
       deity: character.deity,
+      deityGrace: character.deityGrace,
       equippedItems,
       selectedAbilities,
       selectedPotions,
@@ -254,6 +256,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       resolution.injuredMinutes > 0 ? new Date(Date.now() + resolution.injuredMinutes * 60 * 1000) : character.injuredUntil;
 
     const winCount = resolution.fights.filter((f) => f.battle.result === "WIN").length;
+    await recordExpeditionDeitySignals(tx, character.id, resolution, expedition.kind);
     const questRewards = await progressLocationQuests(tx, {
       characterId: character.id,
       characterLevel: afterBattleLevel.level,
@@ -362,6 +365,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       equippedItems,
       selectedAbilities,
       deity: character.deity,
+      deityGrace: character.deityGrace,
       selectedPotions,
     });
 
@@ -466,6 +470,16 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
         );
       }
       allLines.push(lines);
+    }
+
+    const deityCompletions = await checkDeityQuests(tx, character.id, leveled.level, character.deity, {
+      strength: character.strength,
+      dexterity: character.dexterity,
+      vitality: character.vitality,
+      intellect: character.intellect,
+    });
+    if (deityCompletions.length > 0) {
+      allLines.push(deityCompletions.map((c) => `Zadanie bóstwa ukończone: ${c.title} Zdobywasz łaskę.`));
     }
 
     return allLines;

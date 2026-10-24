@@ -28,6 +28,7 @@ export function PvpClient({
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<string[] | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [tactic, setTactic] = useState("BALANCED");
 
   async function attack(defenderId: string) {
     setError(null);
@@ -36,7 +37,7 @@ export function PvpClient({
     const response = await fetch("/api/pvp/attack", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ defenderId }),
+      body: JSON.stringify({ defenderId, tactic }),
     });
     const data = await response.json().catch(() => ({}));
     setPendingId(null);
@@ -66,6 +67,21 @@ export function PvpClient({
         <p className="mt-1 text-sm text-muted">
           Sława: <span className="text-foreground">{fame}</span>
         </p>
+        <div className="mt-2 flex items-center gap-2">
+          <label htmlFor="pvp-tactic" className="text-xs text-muted">
+            Taktyka:
+          </label>
+          <select
+            id="pvp-tactic"
+            value={tactic}
+            onChange={(e) => setTactic(e.target.value)}
+            className="rounded border border-line bg-background px-2 py-1 text-xs text-foreground"
+          >
+            <option value="AGGRESSIVE">Natarcie</option>
+            <option value="BALANCED">Równowaga</option>
+            <option value="DEFENSIVE">Defensywa</option>
+          </select>
+        </div>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
       </div>
 

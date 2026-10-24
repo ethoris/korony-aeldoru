@@ -4,6 +4,7 @@ import type { ResourceKey } from "@/game/data/buildings";
 import { marketTaxPercent } from "@/game/fortress/formulas";
 import { parseSetTemplateKey } from "@/game/data/sets";
 
+import { checkDeityQuests, recordMarketSaleSignal } from "./deityQuests";
 import { prisma } from "./prisma";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -179,6 +180,14 @@ export async function buyOffer(characterId: string, offerId: string): Promise<Bu
     }
 
     await tx.marketOffer.update({ where: { id: offerId }, data: { soldAt: new Date(), buyerCharacterId: characterId } });
+
+    await recordMarketSaleSignal(tx, seller.id, payout);
+    await checkDeityQuests(tx, seller.id, seller.level, seller.deity, {
+      strength: seller.strength,
+      dexterity: seller.dexterity,
+      vitality: seller.vitality,
+      intellect: seller.intellect,
+    });
 
     return { ok: true };
   });

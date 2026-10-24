@@ -69,6 +69,7 @@ export function buildHeroConfigFromEquipment(params: {
   selectedAbilities?: string[];
   selectedPotions?: string[];
   deity?: DeityKey;
+  deityGrace?: number;
 }): HeroConfig {
   const weapon = params.equippedItems.find((i) => i.slot === "WEAPON");
   const weaponBase =
@@ -137,7 +138,7 @@ export function buildHeroConfigFromEquipment(params: {
   }
 
   const deityBonus = params.deity
-    ? deityCombatBonuses(params.deity, params.classKey)
+    ? deityCombatBonuses(params.deity, params.classKey, params.deityGrace ?? 0)
     : { damagePercent: 0, critPercent: 0, hitPercent: 0, healPercent: 0 };
 
   // Premia zestawu klasowego za 2 części (docs/gdd/08-ekwipunek.md). Premie za

@@ -5,10 +5,11 @@ import { applyExperience, experienceToNextLevel } from "@/game/character/experie
 import { dayKeyFor } from "@/game/data/dailyReset";
 import { simulatePvpDuel } from "@/game/combat/duel";
 import { generatePvpReport } from "@/game/combat/generatePvpReport";
-import type { BattleResult } from "@/game/combat/types";
+import type { BattleResult, Tactic } from "@/game/combat/types";
 import type { ItemAffixInstance } from "@/game/items/types";
 import { fameDelta } from "@/game/pvp/fame";
 
+import { checkDeityQuests, recordPvpWinSignal } from "./deityQuests";
 import { prisma } from "./prisma";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -20,7 +21,7 @@ export const PVP_INACTIVE_DAYS = 7;
 /** GDD nie podaje wprost ile PD daje wygrana – własna decyzja (do przeglądu): 5% pełnego poziomu, jak drobne zlecenie. */
 export const PVP_WIN_XP_PERCENT = 0.05;
 
-async function loadHeroConfig(tx: Prisma.TransactionClient, characterId: string) {
+async function loadHeroConfig(tx: Prisma.TransactionClient, characterId: string, tactic?: Tactic) {
   const character = await tx.character.findUniqueOrThrow({ where: { id: characterId } });
   const items = await tx.item.findMany({ where: { characterId, location: "EQUIPPED" } });
   const equippedItems = items.map((item) => ({
@@ -42,8 +43,10 @@ async function loadHeroConfig(tx: Prisma.TransactionClient, characterId: string)
       vitality: character.vitality,
       intellect: character.intellect,
     },
+    tactic,
     equippedItems,
     deity: character.deity,
+    deityGrace: character.deityGrace,
   });
   return { character, hero };
 }
@@ -92,7 +95,7 @@ export type AttackPlayerResult =
   | { error: string };
 
 /** Pojedynek PvP (docs/gdd/00-glowny.md, docs/gdd/02-systemy-walki.md). */
-export async function attackPlayer(attackerId: string, defenderId: string): Promise<AttackPlayerResult> {
+export async function attackPlayer(attackerId: string, defenderId: string, tactic: Tactic = "BALANCED"): Promise<AttackPlayerResult> {
   if (attackerId === defenderId) return { error: "Nie możesz zaatakować samego siebie." };
 
   return prisma.$transaction(async (tx) => {
@@ -117,7 +120,7 @@ export async function attackPlayer(attackerId: string, defenderId: string): Prom
       return { error: `Możesz zaatakować tego gracza maks. ${PVP_MAX_ATTACKS_PER_DAY} razy na dobę.` };
     }
 
-    const { character: attackerFresh, hero: attackerHero } = await loadHeroConfig(tx, attackerId);
+    const { character: attackerFresh, hero: attackerHero } = await loadHeroConfig(tx, attackerId, tactic);
     const { hero: defenderHero } = await loadHeroConfig(tx, defenderId);
 
     const seed = Math.floor(Math.random() * 0xffffffff) + 1;
@@ -203,6 +206,17 @@ export async function attackPlayer(attackerId: string, defenderId: string): Prom
       },
     });
 
-    return { ok: true, result: outcome.result, report, fameDeltaSelf, goldGained, experienceGained };
+    if (won) {
+      await recordPvpWinSignal(tx, attackerId, tactic);
+    }
+    const deityCompletions = await checkDeityQuests(tx, attackerId, attackerFresh.level, attackerFresh.deity, {
+      strength: attackerFresh.strength,
+      dexterity: attackerFresh.dexterity,
+      vitality: attackerFresh.vitality,
+      intellect: attackerFresh.intellect,
+    });
+    const fullReport = [...report, ...deityCompletions.map((c) => `Zadanie bóstwa ukończone: ${c.title} Zdobywasz łaskę.`)];
+
+    return { ok: true, result: outcome.result, report: fullReport, fameDeltaSelf, goldGained, experienceGained };
   });
 }

@@ -59,6 +59,8 @@ Każde obrażenie ma jeden z 7 typów. Słabość to +25% obrażeń tego typu, o
 
 **Runy żywiołów** (Kuźnia poziomu 8): runa w broni zamienia 30% obrażeń broni na wybrany żywioł. Jedna runa na broń; wymiana niszczy starą. Dzięki temu każda klasa może przygotować się na konkretnego bossa.
 
+**Koszt runy** (GDD nie podawał wprost — decyzja wdrożeniowa, do przeglądu): 50 żelaza i 20 many z twierdzy, bez skalowania poziomem. **Uproszczenie silnika:** aktualny kod walki liczy jeden żywioł na cały atak (jak losowa cecha "obrażenia od żywiołu"), więc nałożona runa zamienia 100% obrażeń broni na żywioł, nie 30% — do poprawy, jeśli ma to wpływać na balans starć z bossami żywiołowymi.
+
 **Odporność gracza:** amulety i pierścienie mogą dawać odporność na żywioł (maks. 40% z ekwipunku), co ma znaczenie przy smokach i demonach.
 
 ## Zdolności klas
