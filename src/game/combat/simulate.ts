@@ -41,7 +41,7 @@ interface AttackResolution {
   resistHit: boolean;
 }
 
-function resolveAttack(
+export function resolveAttack(
   rng: Rng,
   params: {
     attackerLevel: number;

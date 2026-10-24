@@ -22,11 +22,11 @@ function declineNumberWord(amount: number, forms: [string, string, string]): str
   return forms[2];
 }
 
-function formatExperience(amount: number): string {
+export function formatExperience(amount: number): string {
   return `${amount} ${declineNumberWord(amount, ["punkt doświadczenia", "punkty doświadczenia", "punktów doświadczenia"])}`;
 }
 
-function formatGold(amount: number): string {
+export function formatGold(amount: number): string {
   return `${amount} ${declineNumberWord(amount, ["złoto", "złota", "złota"])}`;
 }
 

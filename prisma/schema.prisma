@@ -102,6 +102,11 @@ model Character {
   goldPouch Int @default(0)
   fame      Int @default(1000)
 
+  // Przybliżenie aktywności gracza (docs/gdd/00-glowny.md, "Za walkę z dawno
+  // nieaktywnymi graczami nagroda spada do zera") – odświeżane przy wejściu
+  // do gry (syncCharacter), nie przy każdym żądaniu.
+  lastActiveAt DateTime @default(now())
+
   stamina          Int       @default(100)
   staminaUpdatedAt DateTime  @default(now())
   injuredUntil     DateTime?

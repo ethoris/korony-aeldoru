@@ -50,10 +50,18 @@ export async function syncCharacter(characterId: string) {
 
   const now = new Date();
   const regen = regenerateStamina({ stamina: character.stamina, staminaUpdatedAt: character.staminaUpdatedAt }, now);
-  if (regen.stamina !== character.stamina || regen.staminaUpdatedAt.getTime() !== character.staminaUpdatedAt.getTime()) {
+  const staminaChanged =
+    regen.stamina !== character.stamina || regen.staminaUpdatedAt.getTime() !== character.staminaUpdatedAt.getTime();
+  // lastActiveAt tylko raz dziennie, żeby nie zapisywać do bazy przy każdym wejściu.
+  const activeStale = now.getTime() - character.lastActiveAt.getTime() > 60 * 60 * 1000;
+  if (staminaChanged || activeStale) {
     character = await prisma.character.update({
       where: { id: characterId },
-      data: { stamina: regen.stamina, staminaUpdatedAt: regen.staminaUpdatedAt },
+      data: {
+        stamina: regen.stamina,
+        staminaUpdatedAt: regen.staminaUpdatedAt,
+        ...(activeStale ? { lastActiveAt: now } : {}),
+      },
     });
   }
 
