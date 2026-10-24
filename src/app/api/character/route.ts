@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { CLASSES } from "@/game/data/classes";
 import { DEITIES } from "@/game/data/deities";
 import { baseStatsForRace, RACES } from "@/game/data/races";
+import { createStarterGear } from "@/game/items/starterGear";
 import { characterNameKey, validateCharacterName } from "@/lib/validation/characterName";
 import { prisma } from "@/lib/prisma";
 
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
   }
 
   const stats = baseStatsForRace(race as keyof typeof RACES);
+  const starterGear = createStarterGear(classKey as keyof typeof CLASSES);
 
   const character = await prisma.character.create({
     data: {
@@ -62,6 +64,20 @@ export async function POST(request: Request) {
       class: classKey as keyof typeof CLASSES,
       deity: deity as keyof typeof DEITIES,
       ...stats,
+      items: {
+        create: starterGear.map((item) => ({
+          name: item.name,
+          slot: item.slot,
+          level: item.level,
+          quality: item.quality,
+          forClass: item.forClass,
+          damageMin: item.damageMin,
+          damageMax: item.damageMax,
+          armor: item.armor,
+          traits: JSON.parse(JSON.stringify(item.affixes)),
+          location: "EQUIPPED",
+        })),
+      },
     },
   });
 

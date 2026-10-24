@@ -44,6 +44,8 @@ export interface HeroConfig {
    * między walkami” z docs/gdd/05-lokacje.md – HP przechodzi z poprzedniej walki).
    */
   startingHpOverride?: number;
+  /** Dodatkowe PŻ z cechy +PŻ na ekwipunku (docs/gdd/08-ekwipunek.md). */
+  bonusMaxHp?: number;
 }
 
 export interface MonsterConfig {

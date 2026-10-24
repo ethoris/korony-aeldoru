@@ -1,4 +1,5 @@
-import { buildHeroConfigForCombat } from "@/game/character/combatLoadout";
+import { buildHeroConfigFromEquipment } from "@/game/character/combatLoadout";
+import type { EquippedItemSummary } from "@/game/character/combatLoadout";
 import { createRng, randomInt } from "@/game/combat/rng";
 import { simulateBattle } from "@/game/combat/simulate";
 import type { BattleOutcome, BattleResult, ClassKey, ExpeditionKind, MonsterConfig, Stats, Tactic } from "@/game/combat/types";
@@ -39,6 +40,7 @@ export interface ResolveExpeditionParams {
   seed: number;
   startingGoldPouch: number;
   fightsSinceRareDrop: number;
+  equippedItems: EquippedItemSummary[];
 }
 
 function toMonsterConfig(key: string): MonsterConfig {
@@ -58,11 +60,12 @@ export function resolveExpedition(params: ResolveExpeditionParams): ExpeditionRe
 
   const fightCount = isBossRun ? 1 : randomInt(rng, kindDef.fights[0], kindDef.fights[1]);
 
-  const heroConfig = buildHeroConfigForCombat({
+  const heroConfig = buildHeroConfigFromEquipment({
     classKey: params.classKey,
     level: params.level,
     stats: params.stats,
     tactic: params.tactic,
+    equippedItems: params.equippedItems,
   });
 
   const fights: FightOutcome[] = [];

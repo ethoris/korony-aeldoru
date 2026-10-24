@@ -91,7 +91,7 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
   const mainStatValue = hero.stats[classDef.mainStat];
   const heroAttackPower = attackPower(hero.weaponDamage, mainStatValue) * atkTacticMult;
   const heroDefenseValue = heroDefense(hero.armorFromGear, hero.stats.vitality) * defTacticMult;
-  const heroMaxHpValue = heroMaxHp(hero.stats.vitality, hero.level);
+  const heroMaxHpValue = heroMaxHp(hero.stats.vitality, hero.level) + (hero.bonusMaxHp ?? 0);
   const heroDex = hero.stats.dexterity;
 
   const monsterMaxHpValue = monsterMaxHp(monster.level, monster.isBoss);

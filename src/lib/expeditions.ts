@@ -1,6 +1,7 @@
 import "server-only";
 
-import { buildHeroConfigForCombat } from "@/game/character/combatLoadout";
+import { buildHeroConfigFromEquipment } from "@/game/character/combatLoadout";
+import type { EquippedItemSummary } from "@/game/character/combatLoadout";
 import { applyExperience } from "@/game/character/experience";
 import { MAX_STAMINA, regenerateStamina } from "@/game/character/stamina";
 import type { ExpeditionKind, Tactic } from "@/game/combat/types";
@@ -9,10 +10,26 @@ import { EXPEDITION_KINDS } from "@/game/data/expeditionKinds";
 import { getLocation, LOCATIONS } from "@/game/data/locations";
 import { getMonster } from "@/game/data/monsters";
 import { resolveExpedition } from "@/game/expeditions/resolveExpedition";
+import type { ItemAffixInstance } from "@/game/items/types";
 
 import { prisma } from "./prisma";
+import type { Prisma } from "@/generated/prisma/client";
 
 export const SERVER = "Valmor";
+
+async function loadEquippedItems(
+  tx: Prisma.TransactionClient,
+  characterId: string,
+): Promise<EquippedItemSummary[]> {
+  const items = await tx.item.findMany({ where: { characterId, location: "EQUIPPED" } });
+  return items.map((item) => ({
+    slot: item.slot,
+    damageMin: item.damageMin,
+    damageMax: item.damageMax,
+    armor: item.armor,
+    traits: (item.traits as unknown as ItemAffixInstance[]) ?? [],
+  }));
+}
 
 export async function getCharacterForUser(userId: string) {
   return prisma.character.findUnique({ where: { userId_server: { userId, server: SERVER } } });
@@ -142,6 +159,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
 
     const character = await tx.character.findUniqueOrThrow({ where: { id: expedition.characterId } });
     const location = getLocation(expedition.locationKey);
+    const equippedItems = await loadEquippedItems(tx, character.id);
 
     const resolution = resolveExpedition({
       classKey: character.class,
@@ -158,6 +176,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       seed: Number(expedition.seed),
       startingGoldPouch: character.goldPouch,
       fightsSinceRareDrop: character.fightsSinceRareDrop,
+      equippedItems,
     });
 
     const leveled = applyExperience(character.level, character.experience, character.race, resolution.totalXp);
@@ -196,7 +215,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       });
     }
 
-    const heroConfig = buildHeroConfigForCombat({
+    const heroConfig = buildHeroConfigFromEquipment({
       classKey: character.class,
       level: character.level,
       stats: {
@@ -206,6 +225,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
         intellect: character.intellect,
       },
       tactic: expedition.tactic,
+      equippedItems,
     });
 
     const allLines: string[][] = [];
@@ -238,6 +258,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
         const item = await tx.item.create({
           data: {
             characterId: character.id,
+            name: fight.lootItem.name,
             slot: fight.lootItem.slot,
             level: fight.lootItem.level,
             quality: fight.lootItem.quality,

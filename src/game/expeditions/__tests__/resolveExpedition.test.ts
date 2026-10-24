@@ -1,9 +1,31 @@
 import { describe, expect, it } from "vitest";
 
+import type { EquippedItemSummary } from "@/game/character/combatLoadout";
+import { computeArmorTotal, computeWeaponDamage } from "@/game/combat/equipment";
 import { getLocation } from "@/game/data/locations";
 import { getMonster } from "@/game/data/monsters";
 
 import { resolveExpedition } from "../resolveExpedition";
+
+const ARMOR_SLOT_SHARE: Record<string, number> = { ARMOR: 0.45, HELMET: 0.2, BOOTS: 0.2, GLOVES: 0.15 };
+
+/** Zwykły (magiczny) ekwipunek własnego poziomu, jak w metodologii testu balansu. */
+function equipmentFor(level: number): EquippedItemSummary[] {
+  const weaponAvg = computeWeaponDamage("WARRIOR", level, "MAGIC");
+  const items: EquippedItemSummary[] = [
+    { slot: "WEAPON", damageMin: Math.round(weaponAvg * 0.85), damageMax: Math.round(weaponAvg * 1.15), armor: null, traits: [] },
+  ];
+  for (const slot of ["ARMOR", "HELMET", "BOOTS", "GLOVES"] as const) {
+    items.push({
+      slot,
+      damageMin: null,
+      damageMax: null,
+      armor: Math.round(computeArmorTotal("WARRIOR", level, "MAGIC") * ARMOR_SLOT_SHARE[slot]),
+      traits: [],
+    });
+  }
+  return items;
+}
 
 const baseParams = {
   classKey: "WARRIOR" as const,
@@ -12,6 +34,14 @@ const baseParams = {
   tactic: "BALANCED" as const,
   startingGoldPouch: 100,
   fightsSinceRareDrop: 0,
+  equippedItems: equipmentFor(10),
+};
+
+const level1Params = {
+  ...baseParams,
+  level: 1,
+  stats: { strength: 10, dexterity: 10, vitality: 10, intellect: 10 },
+  equippedItems: equipmentFor(1),
 };
 
 describe("resolveExpedition", () => {
@@ -61,14 +91,14 @@ describe("resolveExpedition", () => {
     let foundBossLoss = false;
 
     for (let seed = 1; seed <= 500 && !(foundNormalLoss && foundBossLoss); seed++) {
-      const normal = resolveExpedition({ ...baseParams, level: 1, stats: { strength: 10, dexterity: 10, vitality: 10, intellect: 10 }, location, kind: "HUNT", seed });
+      const normal = resolveExpedition({ ...level1Params, location, kind: "HUNT", seed });
       if (normal.overallResult === "LOSE") {
         foundNormalLoss = true;
         expect(normal.injuredMinutes).toBe(15);
         expect(normal.totalGoldDelta).toBeLessThan(0);
       }
 
-      const boss = resolveExpedition({ ...baseParams, level: 1, stats: { strength: 10, dexterity: 10, vitality: 10, intellect: 10 }, location, kind: "BOSS", seed });
+      const boss = resolveExpedition({ ...level1Params, location, kind: "BOSS", seed });
       if (boss.overallResult === "LOSE") {
         foundBossLoss = true;
         expect(boss.injuredMinutes).toBe(30);
@@ -83,14 +113,7 @@ describe("resolveExpedition", () => {
     const location = getLocation("goblinia-nora");
 
     for (let seed = 1; seed <= 300; seed++) {
-      const resolution = resolveExpedition({
-        ...baseParams,
-        level: 1,
-        stats: { strength: 10, dexterity: 10, vitality: 10, intellect: 10 },
-        location,
-        kind: "HUNT",
-        seed,
-      });
+      const resolution = resolveExpedition({ ...level1Params, location, kind: "HUNT", seed });
       const fight = resolution.fights[0];
       const monsterLevel = getMonster(fight.monsterKey).level;
       const fullXp = 25 * monsterLevel;

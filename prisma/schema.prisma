@@ -196,6 +196,7 @@ model Item {
   character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
 
   templateKey String? // klucz z pliku danych, gdy to przedmiot unikalny/zestawu
+  name        String
   slot        ItemSlot
   level       Int
   quality     ItemQuality

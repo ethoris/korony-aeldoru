@@ -172,9 +172,17 @@ export function CharacterStatsPanel({ character }: { character: CharacterData })
           <Stat label="Sława" value={character.fame} />
         </div>
 
-        <Link href="/expeditions" className="mt-4 inline-block rounded bg-accent px-4 py-2 text-sm font-semibold text-background">
-          Wyprawy
-        </Link>
+        <div className="mt-4 flex gap-3">
+          <Link href="/expeditions" className="rounded bg-accent px-4 py-2 text-sm font-semibold text-background">
+            Wyprawy
+          </Link>
+          <Link href="/inventory" className="rounded border border-line px-4 py-2 text-sm text-foreground">
+            Ekwipunek
+          </Link>
+          <Link href="/ranking" className="rounded border border-line px-4 py-2 text-sm text-foreground">
+            Ranking
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-lg border border-line bg-card p-6">
