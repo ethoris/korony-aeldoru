@@ -92,4 +92,53 @@ describe("buildHeroConfigFromEquipment", () => {
     expect(hero.gearDamagePercent).toBe(0);
     expect(hero.healBonusPercent).toBe(0);
   });
+
+  it("ulepszenie kowala dodaje +2% obrażeń broni i pancerza za poziom", () => {
+    const hero = buildHeroConfigFromEquipment({
+      ...baseParams,
+      equippedItems: [
+        { slot: "WEAPON", damageMin: 100, damageMax: 100, armor: null, traits: [], upgrade: 5 },
+        { slot: "ARMOR", damageMin: null, damageMax: null, armor: 100, traits: [], upgrade: 5 },
+      ],
+    });
+    expect(hero.weaponDamage).toBeCloseTo(110); // +10% (+5 poziomów × 2%)
+    expect(hero.armorFromGear).toBeCloseTo(110);
+  });
+
+  it("runa kowala ustawia żywioł broni", () => {
+    const hero = buildHeroConfigFromEquipment({
+      ...baseParams,
+      equippedItems: [{ slot: "WEAPON", damageMin: 10, damageMax: 20, armor: null, traits: [], rune: "ice" }],
+    });
+    expect(hero.gearWeaponElement).toBe("ice");
+  });
+
+  it("premia zestawu za 2 części (np. Wojownik I: +8% obrażeń) wliczona tylko przy 2+ częściach", () => {
+    const oneItem = buildHeroConfigFromEquipment({
+      ...baseParams,
+      equippedItems: [{ slot: "WEAPON", damageMin: 10, damageMax: 20, armor: null, traits: [], templateKey: "wojownik-i:WEAPON" }],
+    });
+    expect(oneItem.gearDamagePercent).toBe(0);
+
+    const twoItems = buildHeroConfigFromEquipment({
+      ...baseParams,
+      equippedItems: [
+        { slot: "WEAPON", damageMin: 10, damageMax: 20, armor: null, traits: [], templateKey: "wojownik-i:WEAPON" },
+        { slot: "HELMET", damageMin: null, damageMax: null, armor: 5, traits: [], templateKey: "wojownik-i:HELMET" },
+      ],
+    });
+    expect(twoItems.gearDamagePercent).toBe(8);
+  });
+
+  it("premia zestawu za 2 części '% obrony' trafia na gearArmorPercent (np. Paladyn I)", () => {
+    const hero = buildHeroConfigFromEquipment({
+      ...baseParams,
+      classKey: "PALADIN",
+      equippedItems: [
+        { slot: "WEAPON", damageMin: 10, damageMax: 20, armor: null, traits: [], templateKey: "paladyn-i:WEAPON" },
+        { slot: "ARMOR", damageMin: null, damageMax: null, armor: 10, traits: [], templateKey: "paladyn-i:ARMOR" },
+      ],
+    });
+    expect(hero.gearArmorPercent).toBe(10);
+  });
 });

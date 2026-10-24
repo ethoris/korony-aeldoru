@@ -36,6 +36,7 @@ async function loadEquippedItems(
     traits: (item.traits as unknown as ItemAffixInstance[]) ?? [],
     upgrade: item.upgrade,
     rune: item.rune,
+    templateKey: item.templateKey,
   }));
 }
 

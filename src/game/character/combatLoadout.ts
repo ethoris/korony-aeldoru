@@ -5,6 +5,7 @@ import type { DeityKey } from "@/game/data/deities";
 import { AFFIXES } from "@/game/data/itemAffixes";
 import type { ItemAffixInstance, ItemSlot } from "@/game/items/types";
 import { RUNE_ELEMENTS, upgradeEffectPercent } from "@/game/items/upgrade";
+import { SETS, parseSetTemplateKey } from "@/game/data/sets";
 
 /**
  * Buduje konfigurację bohatera do silnika walki z PRAWDZIWYCH statystyk
@@ -45,6 +46,7 @@ export interface EquippedItemSummary {
   traits: ItemAffixInstance[];
   upgrade?: number;
   rune?: string | null;
+  templateKey?: string | null;
 }
 
 /**
@@ -138,6 +140,28 @@ export function buildHeroConfigFromEquipment(params: {
     ? deityCombatBonuses(params.deity, params.classKey)
     : { damagePercent: 0, critPercent: 0, hitPercent: 0, healPercent: 0 };
 
+  // Premia zestawu klasowego za 2 części (docs/gdd/08-ekwipunek.md). Premie za
+  // 4 i 5 części to unikalne mechaniki, jeszcze nie wdrożone w silniku.
+  const setSlotsByKey = new Map<string, Set<string>>();
+  for (const item of params.equippedItems) {
+    const parsed = parseSetTemplateKey(item.templateKey ?? null);
+    if (!parsed) continue;
+    const slots = setSlotsByKey.get(parsed.setKey) ?? new Set<string>();
+    slots.add(parsed.slot);
+    setSlotsByKey.set(parsed.setKey, slots);
+  }
+  let setArmorPercent = 0;
+  let setHealPercent = 0;
+  for (const [setKey, slots] of setSlotsByKey) {
+    if (slots.size < 2) continue;
+    const bonus = SETS[setKey]?.twoPieceBonus;
+    if (!bonus) continue;
+    if (bonus.kind === "damagePercent") gearDamagePercent += bonus.value;
+    else if (bonus.kind === "critPercent") gearCritPercent += bonus.value;
+    else if (bonus.kind === "armorPercent") setArmorPercent += bonus.value;
+    else if (bonus.kind === "healPercent") setHealPercent += bonus.value;
+  }
+
   return {
     classKey: params.classKey,
     level: params.level,
@@ -156,6 +180,7 @@ export function buildHeroConfigFromEquipment(params: {
     gearHitPercent: gearHitPercent + deityBonus.hitPercent,
     gearBlockPercent,
     gearWeaponElement,
-    healBonusPercent: deityBonus.healPercent,
+    gearArmorPercent: setArmorPercent,
+    healBonusPercent: deityBonus.healPercent + setHealPercent,
   };
 }

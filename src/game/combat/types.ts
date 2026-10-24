@@ -58,6 +58,8 @@ export interface HeroConfig {
   gearCritPercent?: number;
   gearHitPercent?: number;
   gearBlockPercent?: number;
+  /** Premia za 2 części zestawu klasowego "+% obrony" (docs/gdd/08-ekwipunek.md). */
+  gearArmorPercent?: number;
   /** Żywioł broni z cechy "żywiołu broni" (zamiast fizycznych obrażeń), gdy przedmiot ją ma. */
   gearWeaponElement?: Element;
   /** Bonus bóstwa Solaris do skuteczności leczenia w walce (docs/gdd/00-glowny.md). */

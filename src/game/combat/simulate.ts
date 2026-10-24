@@ -107,7 +107,11 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
     atkTacticMult *
     (1 + (hero.gearDamagePercent ?? 0) / 100) *
     (1 + potions.atkBonus() / 100);
-  const heroDefenseValue = heroDefense(hero.armorFromGear, hero.stats.vitality) * defTacticMult * (1 + potions.defBonus() / 100);
+  const heroDefenseValue =
+    heroDefense(hero.armorFromGear, hero.stats.vitality) *
+    defTacticMult *
+    (1 + potions.defBonus() / 100) *
+    (1 + (hero.gearArmorPercent ?? 0) / 100);
   const heroMaxHpValue = heroMaxHp(hero.stats.vitality, hero.level) + (hero.bonusMaxHp ?? 0);
   const heroDex = hero.stats.dexterity;
 
