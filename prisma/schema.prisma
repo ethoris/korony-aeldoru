@@ -1,0 +1,364 @@
+// Schemat bazy danych – tabele wersji 1 z docs/gdd/13-technika.md.
+// Dane stałe gry (potwory, lokacje, przedmioty, zdolności, teksty) są w src/game/data,
+// nie w bazie – tu tylko stan graczy i postaci.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Konta i sesje ------------------------------------------------------
+
+enum Role {
+  PLAYER
+  MODERATOR
+  ADMIN
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(PLAYER)
+  ageConfirmed Boolean   @default(false)
+  premiumUntil DateTime?
+  createdAt    DateTime  @default(now())
+
+  sessions     Session[]
+  characters   Character[]
+  adminActions AdminAction[] @relation("AdminActionsByUser")
+  gameEvents   GameEvent[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// --- Bohater --------------------------------------------------------------
+
+enum Race {
+  HUMAN
+  ELF
+  DWARF
+  ORC
+  HALFLING
+  DRAGONBORN
+}
+
+enum Class {
+  WARRIOR
+  PALADIN
+  ARCHER
+  ROGUE
+  MAGE
+  PRIEST
+}
+
+enum Deity {
+  SOLARIS
+  KORGATH
+  ILYRA
+  VEYL
+  MARDUN
+  THESSA
+  MORRAK
+}
+
+model Character {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  server String @default("Valmor")
+  name   String @unique
+  race   Race
+  class  Class
+  deity  Deity
+
+  level      Int @default(1)
+  experience Int @default(0)
+
+  strength   Int @default(10)
+  dexterity  Int @default(10)
+  vitality   Int @default(10)
+  intellect  Int @default(10)
+  freePoints Int @default(0)
+
+  goldPouch Int @default(0)
+  fame      Int @default(1000)
+
+  stamina          Int       @default(100)
+  staminaUpdatedAt DateTime  @default(now())
+  injuredUntil     DateTime?
+
+  createdAt DateTime @default(now())
+
+  items          Item[]
+  expeditions    Expedition[]
+  battleReports  BattleReport[]
+  bossAttempts   BossAttempt[]
+  questsProgress QuestProgress[]
+  titles         CharacterTitle[]
+  nameHistory    NameHistoryEntry[]
+  goldEvents     GoldEvent[]
+  itemEvents     ItemEvent[]
+  gameEvents     GameEvent[]
+
+  @@index([userId])
+  @@map("characters")
+}
+
+model NameHistoryEntry {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  oldName     String
+  newName     String
+  changedAt   DateTime  @default(now())
+  forcedByMod Boolean   @default(false)
+
+  @@index([characterId])
+  @@map("name_history")
+}
+
+// --- Ekwipunek --------------------------------------------------------------
+// Jeden przedmiot = jeden rekord; pole location mówi, gdzie leży
+// (plecak / schowek / poczta łupów / założony), więc nie trzeba trzech
+// identycznych tabel na to samo.
+
+enum ItemSlot {
+  WEAPON
+  OFFHAND
+  HELMET
+  ARMOR
+  GLOVES
+  BOOTS
+  AMULET
+  RING
+}
+
+enum ItemQuality {
+  COMMON
+  MAGIC
+  RARE
+  LEGENDARY
+  SET
+  UNIQUE
+}
+
+enum ItemLocation {
+  EQUIPPED
+  BACKPACK
+  STASH
+  MAIL
+}
+
+model Item {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  templateKey String? // klucz z pliku danych, gdy to przedmiot unikalny/zestawu
+  slot        ItemSlot
+  level       Int
+  quality     ItemQuality
+
+  damageMin Int?
+  damageMax Int?
+  armor     Int?
+
+  traits  Json    @default("[]")
+  upgrade Int     @default(0)
+  rune    String?
+
+  location ItemLocation @default(BACKPACK)
+  locked   Boolean      @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([characterId])
+  @@map("items")
+}
+
+// --- Wyprawy i walki --------------------------------------------------------
+
+enum ExpeditionKind {
+  SCOUT // zwiad
+  HUNT // polowanie
+  DEEP // głęboka wyprawa
+  BOSS
+}
+
+enum Tactic {
+  AGGRESSIVE // Natarcie
+  BALANCED // Równowaga
+  DEFENSIVE // Defensywa
+  RETREAT_30 // Odwrót przy 30% PŻ
+}
+
+model Expedition {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  locationKey String
+  kind        ExpeditionKind
+  tactic      Tactic         @default(BALANCED)
+  abilities   Json           @default("[]") // do 3 wybranych kluczy zdolności
+  potions     Json           @default("[]")
+
+  startAt DateTime @default(now())
+  endAt   DateTime
+  settled Boolean  @default(false)
+
+  @@index([characterId])
+  @@map("expeditions")
+}
+
+enum BattleResult {
+  WIN
+  LOSE
+  DRAW
+  RETREAT
+}
+
+model BattleReport {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  opponentKey String
+  seed        BigInt
+  result      BattleResult
+  turns       Json
+  loot        Json         @default("[]")
+
+  createdAt DateTime @default(now())
+
+  @@index([characterId])
+  @@map("battle_reports")
+}
+
+model BossAttempt {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  bossKey     String
+  day         DateTime  @db.Date
+
+  @@unique([characterId, bossKey, day])
+  @@map("boss_attempts")
+}
+
+// --- Zadania i tytuły --------------------------------------------------------
+
+model QuestProgress {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  questKey    String
+  state       String
+  counter     Int       @default(0)
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([characterId, questKey])
+  @@map("quests_progress")
+}
+
+model CharacterTitle {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  titleKey    String
+  earnedAt    DateTime  @default(now())
+  active      Boolean   @default(false)
+
+  @@unique([characterId, titleKey])
+  @@map("character_titles")
+}
+
+// --- Panel admina i dzienniki ------------------------------------------------
+
+model AdminAction {
+  id         String   @id @default(cuid())
+  adminId    String
+  admin      User     @relation("AdminActionsByUser", fields: [adminId], references: [id])
+  action     String
+  targetType String
+  targetId   String
+  before     Json?
+  after      Json?
+  reason     String
+  createdAt  DateTime @default(now())
+
+  @@index([adminId])
+  @@map("admin_actions")
+}
+
+enum ItemEventType {
+  CREATED
+  MOVED
+  EQUIPPED
+  UNEQUIPPED
+  SOLD
+  TRADED
+  EXPIRED
+  RESTORED
+  DELETED
+}
+
+model ItemEvent {
+  id          String        @id @default(cuid())
+  itemId      String
+  characterId String
+  character   Character     @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  type        ItemEventType
+  fromState   Json?
+  toState     Json?
+  reason      String?
+  createdAt   DateTime      @default(now())
+
+  @@index([characterId])
+  @@index([itemId])
+  @@map("item_events")
+}
+
+model GoldEvent {
+  id           String    @id @default(cuid())
+  characterId  String
+  character    Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  amount       Int // dodatnie = przychód, ujemne = wydatek
+  balanceAfter Int
+  reason       String
+  createdAt    DateTime  @default(now())
+
+  @@index([characterId])
+  @@map("gold_events")
+}
+
+model GameEvent {
+  id          String     @id @default(cuid())
+  userId      String?
+  user        User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  characterId String?
+  character   Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  type        String
+  details     Json       @default("{}")
+  createdAt   DateTime   @default(now())
+
+  @@index([userId])
+  @@index([characterId])
+  @@index([type])
+  @@map("game_events")
+}

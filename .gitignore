@@ -39,3 +39,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.neon
+
+/src/generated/prisma
+
+# lokalne kopie dokumentacji dla agentów AI (prisma init / neon init),
+# nie są kodem gry, odtwarzają się samym poleceniem CLI
+/.agents
+/.claude
+/.windsurf
+/.cursor
+/.copilot
+/.vscode
+skills-lock.json
