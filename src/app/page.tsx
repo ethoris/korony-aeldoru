@@ -23,19 +23,24 @@ async function AccountStatus() {
           {character ? `Twój bohater: ${character.name}` : "Stwórz bohatera"}
         </Link>
 
-        <form
-          action={async () => {
-            "use server";
-            await signOut({ redirectTo: "/" });
-          }}
-        >
-          <button
-            type="submit"
-            className="rounded border border-line px-4 py-2 text-sm text-muted hover:text-foreground"
+        <div className="flex gap-3">
+          <Link href="/konto" className="rounded border border-line px-4 py-2 text-sm text-muted hover:text-foreground">
+            Konto
+          </Link>
+          <form
+            action={async () => {
+              "use server";
+              await signOut({ redirectTo: "/" });
+            }}
           >
-            Wyloguj się
-          </button>
-        </form>
+            <button
+              type="submit"
+              className="rounded border border-line px-4 py-2 text-sm text-muted hover:text-foreground"
+            >
+              Wyloguj się
+            </button>
+          </form>
+        </div>
       </div>
     );
   }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Cinzel, Crimson_Pro, Inter } from "next/font/google";
+import Link from "next/link";
 import "./globals.css";
 
 const cinzel = Cinzel({
@@ -34,6 +35,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col bg-background text-foreground font-ui">
         {children}
+        <footer className="flex justify-center gap-4 border-t border-line p-4 text-xs text-muted">
+          <Link href="/regulamin" className="underline">Regulamin</Link>
+          <Link href="/polityka-prywatnosci" className="underline">Polityka prywatności</Link>
+        </footer>
       </body>
     </html>
   );

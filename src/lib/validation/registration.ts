@@ -8,12 +8,14 @@ export interface RegistrationInput {
   email: string;
   password: string;
   ageConfirmed: boolean;
+  termsAccepted: boolean;
 }
 
 export interface RegistrationErrors {
   email?: string;
   password?: string;
   ageConfirmed?: string;
+  termsAccepted?: string;
 }
 
 export type RegistrationValidation =
@@ -34,6 +36,10 @@ export function validateRegistrationInput(input: RegistrationInput): Registratio
 
   if (!input.ageConfirmed) {
     errors.ageConfirmed = "Musisz potwierdzić, że masz ukończone 16 lat.";
+  }
+
+  if (!input.termsAccepted) {
+    errors.termsAccepted = "Musisz zaakceptować regulamin i politykę prywatności.";
   }
 
   if (Object.keys(errors).length > 0) {

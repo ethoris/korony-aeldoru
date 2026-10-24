@@ -10,12 +10,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ errors: { form: "Nieprawidłowe dane formularza." } }, { status: 400 });
   }
 
-  const { email, password, ageConfirmed } = body as Record<string, unknown>;
+  const { email, password, ageConfirmed, termsAccepted } = body as Record<string, unknown>;
 
   const validation = validateRegistrationInput({
     email: typeof email === "string" ? email : "",
     password: typeof password === "string" ? password : "",
     ageConfirmed: ageConfirmed === true,
+    termsAccepted: termsAccepted === true,
   });
 
   if (!validation.ok) {

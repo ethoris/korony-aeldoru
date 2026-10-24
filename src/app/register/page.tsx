@@ -9,6 +9,7 @@ interface FieldErrors {
   email?: string;
   password?: string;
   ageConfirmed?: string;
+  termsAccepted?: string;
   form?: string;
 }
 
@@ -17,6 +18,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [pending, setPending] = useState(false);
 
@@ -28,7 +30,7 @@ export default function RegisterPage() {
     const response = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, ageConfirmed }),
+      body: JSON.stringify({ email, password, ageConfirmed, termsAccepted }),
     });
 
     const data = await response.json().catch(() => ({}));
@@ -94,6 +96,27 @@ export default function RegisterPage() {
             <span>Mam ukończone 16 lat.</span>
           </label>
           {errors.ageConfirmed && <span className="text-sm text-danger">{errors.ageConfirmed}</span>}
+
+          <label className="flex items-start gap-2 text-sm text-muted">
+            <input
+              type="checkbox"
+              checked={termsAccepted}
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              Akceptuję{" "}
+              <Link href="/regulamin" className="text-accent underline" target="_blank">
+                regulamin
+              </Link>{" "}
+              i{" "}
+              <Link href="/polityka-prywatnosci" className="text-accent underline" target="_blank">
+                politykę prywatności
+              </Link>
+              .
+            </span>
+          </label>
+          {errors.termsAccepted && <span className="text-sm text-danger">{errors.termsAccepted}</span>}
 
           {errors.form && <p className="text-sm text-danger">{errors.form}</p>}
 
