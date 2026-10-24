@@ -436,6 +436,7 @@ model Fortress {
   createdAt DateTime @default(now())
 
   buildQueue BuildQueueEntry[]
+  armies     Army[]
 
   @@map("fortresses")
 }
@@ -451,6 +452,20 @@ model BuildQueueEntry {
 
   @@index([fortressId])
   @@map("build_queue")
+}
+
+// klucz jednostki z src/game/data/units.ts; "w szkoleniu do" per 13-technika.md
+model Army {
+  id          String    @id @default(cuid())
+  fortressId  String
+  fortress    Fortress  @relation(fields: [fortressId], references: [id], onDelete: Cascade)
+  unitKey     String
+  quantity    Int       @default(0)
+  trainingQuantity Int  @default(0)
+  trainingEndAt    DateTime?
+
+  @@unique([fortressId, unitKey])
+  @@map("armies")
 }
 
 model GameEvent {

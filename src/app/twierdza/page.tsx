@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { BUILDINGS, BUILDING_KEYS, FORTRESS_UNLOCK_LEVEL } from "@/game/data/buildings";
+import { UNITS, UNIT_KEYS, armyLimit } from "@/game/data/units";
 import { buildingCostFor, buildingTimeMinutesFor, getFortressView } from "@/lib/fortress";
 import { getCharacterForUser } from "@/lib/expeditions";
 
@@ -35,6 +36,23 @@ export default async function FortressPage() {
     };
   });
 
+  const koszaryLevel = view?.buildingLevels.KOSZARY ?? 0;
+  const units = UNIT_KEYS.map((key) => {
+    const def = UNITS[key];
+    const army = view?.armies.find((a) => a.unitKey === key);
+    return {
+      key,
+      name: def.name,
+      koszaryLevelRequired: def.koszaryLevelRequired,
+      unlocked: koszaryLevel >= def.koszaryLevelRequired,
+      cost: def.cost,
+      trainingMinutesPerUnit: def.trainingMinutesPerUnit,
+      quantity: army?.quantity ?? 0,
+      trainingQuantity: army?.trainingQuantity ?? 0,
+      trainingEndAt: army?.trainingEndAt?.toISOString() ?? null,
+    };
+  });
+
   return (
     <main className="flex flex-1 justify-center p-4">
       <FortressClient
@@ -48,6 +66,8 @@ export default async function FortressPage() {
           view?.queue.map((q) => ({ building: q.building, targetLevel: q.targetLevel, endAt: q.endAt.toISOString() })) ?? []
         }
         buildings={buildings}
+        units={units}
+        armyLimit={armyLimit(koszaryLevel)}
       />
     </main>
   );

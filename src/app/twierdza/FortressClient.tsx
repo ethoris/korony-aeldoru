@@ -19,6 +19,18 @@ interface QueueView {
   endAt: string;
 }
 
+interface UnitView {
+  key: string;
+  name: string;
+  koszaryLevelRequired: number;
+  unlocked: boolean;
+  cost: { wood: number; iron: number; food: number; gold: number; mana?: number };
+  trainingMinutesPerUnit: number;
+  quantity: number;
+  trainingQuantity: number;
+  trainingEndAt: string | null;
+}
+
 const RESOURCE_NAMES: Record<string, string> = { wood: "drewno", stone: "kamień", iron: "żelazo", food: "żywność", mana: "mana" };
 
 export function FortressClient({
@@ -30,6 +42,8 @@ export function FortressClient({
   goldVault,
   queue,
   buildings,
+  units,
+  armyLimit,
 }: {
   founded: boolean;
   characterLevel: number;
@@ -39,11 +53,14 @@ export function FortressClient({
   goldVault: number;
   queue: QueueView[];
   buildings: BuildingView[];
+  units: UnitView[];
+  armyLimit: number;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [vaultAmount, setVaultAmount] = useState(100);
+  const [trainQuantity, setTrainQuantity] = useState(1);
 
   async function found() {
     setError(null);
@@ -87,6 +104,23 @@ export function FortressClient({
     setPending(false);
     if (!response.ok) {
       setError(data.error ?? "Nie udało się przenieść złota.");
+      return;
+    }
+    router.refresh();
+  }
+
+  async function train(unitKey: string, quantity: number) {
+    setError(null);
+    setPending(true);
+    const response = await fetch("/api/fortress/train", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unitKey, quantity }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setPending(false);
+    if (!response.ok) {
+      setError(data.error ?? "Nie udało się rozpocząć szkolenia.");
       return;
     }
     router.refresh();
@@ -187,6 +221,58 @@ export function FortressClient({
                 className="shrink-0 rounded bg-accent px-3 py-1.5 text-xs font-semibold text-background disabled:opacity-40"
               >
                 Buduj poz. {b.currentLevel + 1}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-line bg-card p-5">
+        <h2 className="font-display text-base font-bold text-foreground">Koszary (wojsko)</h2>
+        <p className="mt-1 text-xs text-muted">
+          Limit wojska: {units.reduce((sum, u) => sum + u.quantity + u.trainingQuantity, 0)}/{armyLimit}
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <label className="text-xs text-muted" htmlFor="train-quantity">
+            Liczba:
+          </label>
+          <input
+            id="train-quantity"
+            type="number"
+            min={1}
+            value={trainQuantity}
+            onChange={(e) => setTrainQuantity(Math.max(1, Number(e.target.value) || 0))}
+            className="w-20 rounded border border-line bg-background px-2 py-1 text-sm text-foreground"
+          />
+        </div>
+        <div className="mt-3 flex flex-col gap-2">
+          {units.map((u) => (
+            <div key={u.key} className="flex items-center justify-between gap-3 rounded border border-line p-3 text-sm">
+              <div>
+                <p className="text-foreground">
+                  {u.name} <span className="text-xs text-muted">(masz: {u.quantity})</span>
+                </p>
+                {u.unlocked ? (
+                  <p className="text-xs text-muted">
+                    Koszt/szt: {u.cost.wood} drewna, {u.cost.iron} żelaza, {u.cost.food} żywności, {u.cost.gold} złota
+                    {u.cost.mana ? `, ${u.cost.mana} many` : ""} · {u.trainingMinutesPerUnit} min/szt
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted">Wymaga Koszar poziomu {u.koszaryLevelRequired}.</p>
+                )}
+                {u.trainingQuantity > 0 && u.trainingEndAt && (
+                  <p className="text-xs text-accent">
+                    Szkoli się: {u.trainingQuantity}, koniec {new Date(u.trainingEndAt).toLocaleString("pl-PL")}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                disabled={pending || !u.unlocked || u.trainingQuantity > 0}
+                onClick={() => train(u.key, trainQuantity)}
+                className="shrink-0 rounded bg-accent px-3 py-1.5 text-xs font-semibold text-background disabled:opacity-40"
+              >
+                Szkol
               </button>
             </div>
           ))}

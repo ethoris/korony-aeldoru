@@ -10,8 +10,12 @@ import {
   FORTRESS_UNLOCK_LEVEL,
 } from "@/game/data/buildings";
 import { buildingCost, buildingTimeMinutes } from "@/game/fortress/formulas";
+import type { ArmyRow } from "@/game/fortress/armySettle";
+import { armyFoodPerHour, settleArmies } from "@/game/fortress/armySettle";
 import type { BuildingLevels, QueueEntry, Resources } from "@/game/fortress/settle";
 import { settleFortress } from "@/game/fortress/settle";
+import { UNITS, UNIT_KEYS, armyLimit } from "@/game/data/units";
+import type { UnitKey } from "@/game/data/units";
 
 import { prisma } from "./prisma";
 
@@ -34,21 +38,33 @@ function levelsFromJson(json: Prisma.JsonValue): BuildingLevels {
   return levels;
 }
 
+export interface ArmyView {
+  unitKey: UnitKey;
+  quantity: number;
+  trainingQuantity: number;
+  trainingEndAt: Date | null;
+}
+
 export interface FortressView {
   buildingLevels: BuildingLevels;
   resources: Resources;
   goldVault: number;
   queue: QueueEntry[];
   protectionUntil: Date;
+  armies: ArmyView[];
 }
 
+const UNIT_FOOD_PER_HOUR = Object.fromEntries(UNIT_KEYS.map((k) => [k, UNITS[k].foodPerHour])) as Record<UnitKey, number>;
+
 async function loadAndSettle(tx: Prisma.TransactionClient, characterId: string, now: Date): Promise<FortressView | null> {
-  const fortress = await tx.fortress.findUnique({ where: { characterId }, include: { buildQueue: true } });
+  const fortress = await tx.fortress.findUnique({ where: { characterId }, include: { buildQueue: true, armies: true } });
   if (!fortress) return null;
 
   const queue: QueueEntry[] = fortress.buildQueue
     .map((entry) => ({ id: entry.id, building: entry.building as BuildingKey, targetLevel: entry.targetLevel, endAt: entry.endAt }))
     .sort((a, b) => a.endAt.getTime() - b.endAt.getTime());
+
+  const hoursElapsed = Math.max(0, (now.getTime() - fortress.lastProductionAt.getTime()) / (60 * 60 * 1000));
 
   const result = settleFortress(
     {
@@ -64,6 +80,30 @@ async function loadAndSettle(tx: Prisma.TransactionClient, characterId: string, 
     await tx.buildQueueEntry.deleteMany({ where: { id: { in: result.completed.map((c) => c.id) } } });
   }
 
+  const armyRows: ArmyRow[] = fortress.armies.map((a) => ({
+    unitKey: a.unitKey as UnitKey,
+    quantity: a.quantity,
+    trainingQuantity: a.trainingQuantity,
+    trainingEndAt: a.trainingEndAt,
+  }));
+  const armyResult = settleArmies(armyRows, now);
+  for (const row of armyResult.armies) {
+    const original = fortress.armies.find((a) => a.unitKey === row.unitKey);
+    if (!original) continue;
+    if (row.quantity !== original.quantity || row.trainingQuantity !== original.trainingQuantity) {
+      await tx.army.update({
+        where: { id: original.id },
+        data: { quantity: row.quantity, trainingQuantity: row.trainingQuantity, trainingEndAt: row.trainingEndAt },
+      });
+    }
+  }
+
+  // Żywność/h całego wojska (docs/gdd/09-twierdza-i-wojna.md); uproszczenie –
+  // liczona z ilości PO rozliczeniu szkoleń za cały upływ czasu, bez dzielenia
+  // na odcinki jak przy produkcji budynków (szkolenia kończą się rzadziej).
+  const foodUpkeep = armyFoodPerHour(armyResult.armies, UNIT_FOOD_PER_HOUR) * hoursElapsed;
+  const foodAfterUpkeep = Math.max(0, result.resources.food - foodUpkeep);
+
   await tx.fortress.update({
     where: { characterId },
     data: {
@@ -71,7 +111,7 @@ async function loadAndSettle(tx: Prisma.TransactionClient, characterId: string, 
       wood: Math.round(result.resources.wood),
       stone: Math.round(result.resources.stone),
       iron: Math.round(result.resources.iron),
-      food: Math.round(result.resources.food),
+      food: Math.round(foodAfterUpkeep),
       mana: Math.round(result.resources.mana),
       lastProductionAt: result.lastProductionAt,
     },
@@ -83,12 +123,13 @@ async function loadAndSettle(tx: Prisma.TransactionClient, characterId: string, 
       wood: Math.round(result.resources.wood),
       stone: Math.round(result.resources.stone),
       iron: Math.round(result.resources.iron),
-      food: Math.round(result.resources.food),
+      food: Math.round(foodAfterUpkeep),
       mana: Math.round(result.resources.mana),
     },
     goldVault: fortress.goldVault,
     queue: result.remainingQueue,
     protectionUntil: fortress.protectionUntil,
+    armies: armyResult.armies,
   };
 }
 
@@ -184,6 +225,84 @@ export async function startBuild(characterId: string, building: BuildingKey): Pr
       await tx.character.update({ where: { id: characterId }, data: { goldPouch: newGoldPouch } });
       await tx.goldEvent.create({
         data: { characterId, amount: -cost.gold, balanceAfter: newGoldPouch, reason: `budowa: ${def.name} poz. ${targetLevel}` },
+      });
+    }
+
+    return { ok: true, endAt };
+  });
+}
+
+export type TrainUnitsResult = { ok: true; endAt: Date } | { error: string };
+
+/** Szkoli jednostki w Koszarach (docs/gdd/09-twierdza-i-wojna.md). Jedno szkolenie na typ jednostki naraz. */
+export async function trainUnits(characterId: string, unitKey: UnitKey, quantity: number): Promise<TrainUnitsResult> {
+  const def = UNITS[unitKey];
+  if (!def) return { error: "Nieznana jednostka." };
+  if (!Number.isInteger(quantity) || quantity <= 0) return { error: "Nieprawidłowa liczba jednostek." };
+
+  return prisma.$transaction(async (tx) => {
+    const now = new Date();
+    const view = await loadAndSettle(tx, characterId, now);
+    if (!view) return { error: "Nie masz jeszcze twierdzy." };
+
+    const koszaryLevel = view.buildingLevels.KOSZARY;
+    if (koszaryLevel < def.koszaryLevelRequired) {
+      return { error: `Potrzebujesz Koszar poziomu ${def.koszaryLevelRequired}, masz ${koszaryLevel}.` };
+    }
+
+    const existing = view.armies.find((a) => a.unitKey === unitKey);
+    if (existing && existing.trainingQuantity > 0) {
+      return { error: `${def.name} już się szkoli.` };
+    }
+
+    const totalArmy = view.armies.reduce((sum, a) => sum + a.quantity + a.trainingQuantity, 0);
+    if (totalArmy + quantity > armyLimit(koszaryLevel)) {
+      return { error: `Limit wojska to ${armyLimit(koszaryLevel)} (poziom Koszar × 50).` };
+    }
+
+    const cost = {
+      wood: def.cost.wood * quantity,
+      iron: def.cost.iron * quantity,
+      food: def.cost.food * quantity,
+      gold: def.cost.gold * quantity,
+      mana: (def.cost.mana ?? 0) * quantity,
+    };
+    if (view.resources.wood < cost.wood || view.resources.iron < cost.iron || view.resources.food < cost.food || view.resources.mana < cost.mana) {
+      return { error: "Nie masz wystarczająco surowców." };
+    }
+    const character = await tx.character.findUniqueOrThrow({ where: { id: characterId } });
+    if (character.goldPouch < cost.gold) {
+      return { error: `Potrzebujesz ${cost.gold} złota, masz ${character.goldPouch}.` };
+    }
+
+    const minutes = def.trainingMinutesPerUnit * quantity;
+    const endAt = new Date(now.getTime() + minutes * 60 * 1000);
+    const fortressRow = await tx.fortress.findUniqueOrThrow({ where: { characterId } });
+
+    await tx.fortress.update({
+      where: { characterId },
+      data: {
+        wood: view.resources.wood - cost.wood,
+        iron: view.resources.iron - cost.iron,
+        food: view.resources.food - cost.food,
+        mana: view.resources.mana - cost.mana,
+      },
+    });
+
+    if (existing) {
+      await tx.army.update({
+        where: { fortressId_unitKey: { fortressId: fortressRow.id, unitKey } },
+        data: { trainingQuantity: quantity, trainingEndAt: endAt },
+      });
+    } else {
+      await tx.army.create({ data: { fortressId: fortressRow.id, unitKey, quantity: 0, trainingQuantity: quantity, trainingEndAt: endAt } });
+    }
+
+    if (cost.gold > 0) {
+      const newGoldPouch = character.goldPouch - cost.gold;
+      await tx.character.update({ where: { id: characterId }, data: { goldPouch: newGoldPouch } });
+      await tx.goldEvent.create({
+        data: { characterId, amount: -cost.gold, balanceAfter: newGoldPouch, reason: `koszary: szkolenie ${def.name} ×${quantity}` },
       });
     }
 
