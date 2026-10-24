@@ -14,6 +14,7 @@ import { MAX_BELT_POTIONS, getPotion } from "@/game/data/potions";
 import { getMonster } from "@/game/data/monsters";
 import { resolveExpedition } from "@/game/expeditions/resolveExpedition";
 import type { ItemAffixInstance } from "@/game/items/types";
+import { progressLocationHunts } from "@/lib/hunts";
 import { isLocationUnlocked, progressLocationQuests } from "@/lib/quests";
 
 import { prisma } from "./prisma";
@@ -250,9 +251,17 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       bossKey: expedition.kind === "BOSS" ? (location.bossKey ?? null) : null,
       bossResult: expedition.kind === "BOSS" ? resolution.overallResult : null,
     });
+    const huntRewards = await progressLocationHunts(tx, {
+      characterId: character.id,
+      characterLevel: afterBattleLevel.level,
+      locationKey: location.key,
+      winCount,
+      now: new Date(),
+    });
 
-    const questXp = questRewards.reduce((sum, r) => sum + r.xpBonus, 0);
-    const questGold = questRewards.reduce((sum, r) => sum + r.goldBonus, 0);
+    const questXp = questRewards.reduce((sum, r) => sum + r.xpBonus, 0) + huntRewards.reduce((sum, r) => sum + r.xpBonus, 0);
+    const questGold =
+      questRewards.reduce((sum, r) => sum + r.goldBonus, 0) + huntRewards.reduce((sum, r) => sum + r.goldBonus, 0);
     const questStamina = questRewards.reduce((sum, r) => sum + r.staminaBonus, 0);
 
     const leveled =
@@ -406,6 +415,14 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
         );
       });
       allLines.push(questLines);
+    }
+
+    if (huntRewards.length > 0) {
+      const huntLines = huntRewards.map((r) => {
+        const potionName = getPotion(r.potionKey)?.name ?? r.potionKey;
+        return `Łowy ukończone! Zdobywasz ${r.xpBonus} PD, ${r.goldBonus} złota i miksturę: ${potionName}.`;
+      });
+      allLines.push(huntLines);
     }
 
     return allLines;

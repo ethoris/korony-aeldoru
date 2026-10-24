@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { LOCATIONS } from "@/game/data/locations";
 import { QUESTS } from "@/game/data/quests";
 import { getCharacterForUser } from "@/lib/expeditions";
+import { huntSlotsForLocation } from "@/lib/hunts";
 import { prisma } from "@/lib/prisma";
 
 export const instant = false;
@@ -30,6 +31,7 @@ export default async function QuestsPage() {
 
   const progress = await prisma.questProgress.findMany({ where: { characterId: character.id } });
   const progressByKey = new Map(progress.map((p) => [p.questKey, p]));
+  const now = new Date();
 
   return (
     <main className="flex flex-1 justify-center p-4">
@@ -43,6 +45,7 @@ export default async function QuestsPage() {
 
         {LOCATIONS.map((location) => {
           const quests = QUESTS.filter((q) => q.locationKey === location.key);
+          const hunts = huntSlotsForLocation(location.key, now);
           if (quests.length === 0) return null;
 
           return (
@@ -65,6 +68,22 @@ export default async function QuestsPage() {
                       <p className="text-xs text-muted">
                         Cel: {CONDITION_LABEL[quest.condition.type](quest.condition.target)}
                         {quest.condition.type === "WIN_COUNT" && !isDone && ` (${counter}/${quest.condition.target})`}
+                      </p>
+                    </div>
+                  );
+                })}
+
+                {hunts.map((hunt, i) => {
+                  const state = progressByKey.get(hunt.key);
+                  const isDone = state?.state === "COMPLETED";
+                  const counter = state?.counter ?? 0;
+                  return (
+                    <div key={hunt.key} className="text-sm">
+                      <p className={isDone ? "text-success" : "text-foreground"}>
+                        🏹 Łowy {i + 1}/3{isDone && " — Ukończone"}
+                      </p>
+                      <p className="text-xs text-muted">
+                        Cel: {hunt.target} wygranych w tej lokacji{!isDone && ` (${Math.min(counter, hunt.target)}/${hunt.target})`}
                       </p>
                     </div>
                   );
