@@ -138,6 +138,8 @@ model Character {
   raidsReceived  Raid[]             @relation("RaidDefender")
   guildLed       Guild?             @relation("GuildLeader")
   guildMembership GuildMember?
+  marketOffersSold   MarketOffer[]  @relation("MarketSeller")
+  marketOffersBought MarketOffer[]  @relation("MarketBuyer")
 
   @@unique([server, nameKey])
   @@unique([userId, server])
@@ -199,6 +201,7 @@ enum ItemLocation {
   BACKPACK
   STASH
   MAIL
+  MARKET
 }
 
 model Item {
@@ -230,7 +233,8 @@ model Item {
   location ItemLocation @default(BACKPACK)
   locked   Boolean      @default(false)
 
-  createdAt DateTime @default(now())
+  createdAt   DateTime     @default(now())
+  marketOffer MarketOffer?
 
   @@index([characterId])
   @@map("items")
@@ -530,6 +534,29 @@ model GuildMember {
 
   @@index([guildId])
   @@map("guild_members")
+}
+
+// --- Targowisko (wersja 4, docs/gdd/00-glowny.md, docs/gdd/13-technika.md) ---
+
+// sprzedający, przedmiot lub surowiec, cena, wygasa, kupiec
+model MarketOffer {
+  id                 String    @id @default(cuid())
+  sellerCharacterId  String
+  sellerCharacter    Character @relation("MarketSeller", fields: [sellerCharacterId], references: [id], onDelete: Cascade)
+  itemId             String?   @unique
+  item               Item?     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  // klucz surowca z src/game/data/buildings.ts (ResourceKey), gdy to oferta surowca, nie przedmiotu
+  resourceKey        String?
+  quantity           Int       @default(1)
+  price              Int
+  createdAt          DateTime  @default(now())
+  expiresAt          DateTime
+  buyerCharacterId   String?
+  buyerCharacter     Character? @relation("MarketBuyer", fields: [buyerCharacterId], references: [id], onDelete: SetNull)
+  soldAt             DateTime?
+
+  @@index([sellerCharacterId])
+  @@map("market_offers")
 }
 
 model GameEvent {

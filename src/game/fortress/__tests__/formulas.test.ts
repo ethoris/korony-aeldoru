@@ -6,6 +6,7 @@ import {
   buildingCost,
   buildingTimeMinutes,
   manaPerHour,
+  marketTaxPercent,
   productionPerHour,
   raidProtectionPercent,
   vaultCapacity,
@@ -76,5 +77,13 @@ describe("fortress formulas", () => {
     expect(buildingTimeMinutes(tartak, 1, false)).toBe(3);
     expect(buildingTimeMinutes(tartak, 1, true)).toBeCloseTo(3 * 0.85);
     expect(buildingTimeMinutes(tartak, 20, false) / 60).toBeCloseTo(3.5, 1);
+  });
+
+  it("podatek targowiska: 5% bazowo, 4% od poz.10, 3% od poz.20", () => {
+    expect(marketTaxPercent(1)).toBe(5);
+    expect(marketTaxPercent(9)).toBe(5);
+    expect(marketTaxPercent(10)).toBe(4);
+    expect(marketTaxPercent(19)).toBe(4);
+    expect(marketTaxPercent(20)).toBe(3);
   });
 });

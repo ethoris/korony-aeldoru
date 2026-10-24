@@ -31,6 +31,17 @@ export function raidProtectionPercent(magazynLevel: number): number {
   return 12 + 2 * (magazynLevel - 1);
 }
 
+/**
+ * Podatek targowiska w % (docs/gdd/00-glowny.md: 5% bazowo, hamuje
+ * inflację; docs/gdd/09-twierdza-i-wojna.md: Targowisko poz. 10 → −1 pkt%,
+ * poz. 20 → 3%).
+ */
+export function marketTaxPercent(targowiskoLevel: number): number {
+  if (targowiskoLevel >= 20) return 3;
+  if (targowiskoLevel >= 10) return 4;
+  return 5;
+}
+
 /** koszt(p) = koszt bazowy · 1,3^(p−1); Krasnoludy płacą 15% mniej. */
 export function buildingCost(def: BuildingDefinition, targetLevel: number, isDwarf: boolean): BuildingCost {
   const multiplier = Math.pow(1.3, targetLevel - 1) * (isDwarf ? 0.85 : 1);
