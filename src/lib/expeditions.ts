@@ -14,6 +14,7 @@ import { MAX_BELT_POTIONS, getPotion } from "@/game/data/potions";
 import { getMonster } from "@/game/data/monsters";
 import { resolveExpedition } from "@/game/expeditions/resolveExpedition";
 import type { ItemAffixInstance } from "@/game/items/types";
+import { progressDailyQuests } from "@/lib/dailyQuests";
 import { progressLocationHunts } from "@/lib/hunts";
 import { isLocationUnlocked, progressLocationQuests } from "@/lib/quests";
 
@@ -259,11 +260,25 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       winCount,
       now: new Date(),
     });
+    const dailyReward = await progressDailyQuests(tx, {
+      characterId: character.id,
+      characterLevel: afterBattleLevel.level,
+      characterClass: character.class,
+      now: new Date(),
+      delta: {
+        expeditions: 1,
+        wins: winCount,
+        bossWin: expedition.kind === "BOSS" && resolution.overallResult === "WIN",
+        goldEarned: resolution.totalGoldDelta,
+        lootFound: resolution.fights.some((f) => f.lootItem !== null),
+      },
+    });
 
     const questXp = questRewards.reduce((sum, r) => sum + r.xpBonus, 0) + huntRewards.reduce((sum, r) => sum + r.xpBonus, 0);
     const questGold =
       questRewards.reduce((sum, r) => sum + r.goldBonus, 0) + huntRewards.reduce((sum, r) => sum + r.goldBonus, 0);
-    const questStamina = questRewards.reduce((sum, r) => sum + r.staminaBonus, 0);
+    const questStamina =
+      questRewards.reduce((sum, r) => sum + r.staminaBonus, 0) + (dailyReward?.staminaBonus ?? 0);
 
     const leveled =
       questXp > 0
@@ -425,6 +440,21 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
         return `Łowy ukończone! Zdobywasz ${r.xpBonus} PD, ${r.goldBonus} złota i miksturę: ${potionName}.`;
       });
       allLines.push(huntLines);
+    }
+
+    if (dailyReward) {
+      const parts = [
+        `Zadania dzienne: komplet! +${dailyReward.staminaBonus} wytrwałości`,
+        dailyReward.itemName ? `przedmiot: ${dailyReward.itemName}` : null,
+      ].filter(Boolean);
+      const lines = [parts.join(", ") + "."];
+      if (dailyReward.streakDay && dailyReward.streakDay % 7 === 0) {
+        lines.push(
+          `Seria ${dailyReward.streakDay} dni z rzędu! Skrzynia legendarna` +
+            (dailyReward.legendaryBonusItemName ? `: ${dailyReward.legendaryBonusItemName}.` : "."),
+        );
+      }
+      allLines.push(lines);
     }
 
     return allLines;

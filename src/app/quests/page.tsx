@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { LOCATIONS } from "@/game/data/locations";
 import { QUESTS } from "@/game/data/quests";
+import { dailyQuestSlotsFor } from "@/lib/dailyQuests";
 import { getCharacterForUser } from "@/lib/expeditions";
 import { huntSlotsForLocation } from "@/lib/hunts";
 import { prisma } from "@/lib/prisma";
@@ -32,6 +33,7 @@ export default async function QuestsPage() {
   const progress = await prisma.questProgress.findMany({ where: { characterId: character.id } });
   const progressByKey = new Map(progress.map((p) => [p.questKey, p]));
   const now = new Date();
+  const dailySlots = dailyQuestSlotsFor(character.id, now);
 
   return (
     <main className="flex flex-1 justify-center p-4">
@@ -41,6 +43,26 @@ export default async function QuestsPage() {
           <p className="mt-1 text-sm text-muted">
             Rozdziały I–II: zadania fabularne (odblokowują kolejną lokację) i zlecenia.
           </p>
+        </div>
+
+        <div className="rounded-lg border border-line bg-card p-5">
+          <h2 className="font-display text-base font-bold text-foreground">Zadania dzienne (reset 6:00)</h2>
+          <div className="mt-3 flex flex-col gap-3">
+            {dailySlots.map((slot) => {
+              const state = progressByKey.get(slot.key);
+              const isDone = state?.state === "COMPLETED";
+              const counter = Math.min(state?.counter ?? 0, slot.target);
+              return (
+                <div key={slot.key} className="text-sm">
+                  <p className={isDone ? "text-success" : "text-foreground"}>
+                    ⭐ {slot.label}
+                    {isDone && " — Ukończone"}
+                  </p>
+                  {!isDone && <p className="text-xs text-muted">({counter}/{slot.target})</p>}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {LOCATIONS.map((location) => {
