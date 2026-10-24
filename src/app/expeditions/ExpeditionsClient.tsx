@@ -30,6 +30,13 @@ interface SelectableAbility {
   effectText: string;
 }
 
+interface OwnedPotion {
+  key: string;
+  name: string;
+  effectText: string;
+  owned: number;
+}
+
 const ZONE_NAMES: Record<string, string> = {
   "szepczacy-las": "Szepczący Las (poziomy 1–10)",
   "bagna-mglistej-wiezy": "Bagna Mglistej Wieży (poziomy 11–25)",
@@ -51,6 +58,7 @@ const SPELL_ELEMENTS: Array<{ key: "fire" | "ice" | "lightning"; label: string }
 ];
 
 const MAX_SELECTED_ABILITIES = 3;
+const MAX_BELT_POTIONS = 3;
 
 function formatCountdown(ms: number): string {
   if (ms <= 0) return "0:00";
@@ -63,6 +71,7 @@ function formatCountdown(ms: number): string {
 export function ExpeditionsClient({
   character,
   selectableAbilities,
+  ownedCombatPotions,
   activeExpedition,
   locations,
   kinds,
@@ -70,6 +79,7 @@ export function ExpeditionsClient({
 }: {
   character: { level: number; stamina: number; injuredUntil: string | null; classKey: string };
   selectableAbilities: SelectableAbility[];
+  ownedCombatPotions: OwnedPotion[];
   activeExpedition: ActiveExpedition | null;
   locations: LocationSummary[];
   kinds: Record<string, ExpeditionKindDefinition>;
@@ -82,11 +92,20 @@ export function ExpeditionsClient({
   const [tactic, setTactic] = useState<(typeof TACTICS)[number]["key"]>("BALANCED");
   const [spellElement, setSpellElement] = useState<(typeof SPELL_ELEMENTS)[number]["key"]>("fire");
   const [selectedAbilities, setSelectedAbilities] = useState<string[]>([]);
+  const [selectedPotions, setSelectedPotions] = useState<string[]>([]);
 
   function toggleAbility(key: string) {
     setSelectedAbilities((prev) => {
       if (prev.includes(key)) return prev.filter((k) => k !== key);
       if (prev.length >= MAX_SELECTED_ABILITIES) return prev;
+      return [...prev, key];
+    });
+  }
+
+  function togglePotion(key: string) {
+    setSelectedPotions((prev) => {
+      if (prev.includes(key)) return prev.filter((k) => k !== key);
+      if (prev.length >= MAX_BELT_POTIONS) return prev;
       return [...prev, key];
     });
   }
@@ -125,6 +144,7 @@ export function ExpeditionsClient({
         tactic,
         abilities: selectedAbilities,
         spellElement: character.classKey === "MAGE" ? spellElement : undefined,
+        potions: selectedPotions,
       }),
     });
     const data = await response.json().catch(() => ({}));
@@ -254,6 +274,40 @@ export function ExpeditionsClient({
                         <span>
                           <span className="text-foreground">{ability.name}</span>{" "}
                           <span className="text-muted">— {ability.effectText}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {ownedCombatPotions.length > 0 && (
+              <>
+                <p className="mt-4 text-sm text-muted">
+                  Pas z miksturami (do {MAX_BELT_POTIONS}) — {selectedPotions.length}/{MAX_BELT_POTIONS}
+                </p>
+                <div className="mt-2 flex flex-col gap-2">
+                  {ownedCombatPotions.map((potion) => {
+                    const checked = selectedPotions.includes(potion.key);
+                    const disabled = !checked && selectedPotions.length >= MAX_BELT_POTIONS;
+                    return (
+                      <label
+                        key={potion.key}
+                        className={`flex items-start gap-2 text-sm ${disabled ? "opacity-40" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={() => togglePotion(potion.key)}
+                          className="mt-1"
+                        />
+                        <span>
+                          <span className="text-foreground">
+                            {potion.name} ({potion.owned})
+                          </span>{" "}
+                          <span className="text-muted">— {potion.effectText}</span>
                         </span>
                       </label>
                     );

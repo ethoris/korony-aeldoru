@@ -127,6 +127,7 @@ model Character {
   goldEvents     GoldEvent[]
   itemEvents     ItemEvent[]
   gameEvents     GameEvent[]
+  consumables    Consumable[]
 
   @@unique([server, nameKey])
   @@unique([userId, server])
@@ -385,6 +386,19 @@ model GoldEvent {
 
   @@index([characterId])
   @@map("gold_events")
+}
+
+// --- Sklep i mikstury (docs/gdd/11-gospodarka-i-zadania.md) ------------------
+
+model Consumable {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  kind        String // klucz z src/game/data/potions.ts
+  quantity    Int       @default(0)
+
+  @@unique([characterId, kind])
+  @@map("consumables")
 }
 
 model GameEvent {

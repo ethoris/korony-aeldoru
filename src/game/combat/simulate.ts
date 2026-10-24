@@ -1,6 +1,7 @@
 import { CLASSES } from "@/game/data/classes";
 
 import { AbilityRuntime } from "./abilityEngine";
+import { PotionRuntime } from "./potionEngine";
 import {
   CRIT_MULTIPLIER,
   attackPower,
@@ -94,14 +95,18 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
   const classDef = CLASSES[hero.classKey];
   const tactic = hero.tactic ?? "BALANCED";
   const abilities = new AbilityRuntime(hero.classKey, hero.level, hero.selectedAbilities ?? []);
+  const potions = new PotionRuntime(hero.selectedPotions ?? [], monster.isBoss);
 
   const atkTacticMult = tactic === "AGGRESSIVE" ? 1.15 : tactic === "DEFENSIVE" ? 0.85 : 1;
   const defTacticMult = tactic === "AGGRESSIVE" ? 0.85 : tactic === "DEFENSIVE" ? 1.15 : 1;
 
   const mainStatValue = hero.stats[classDef.mainStat];
   const heroAttackPower =
-    attackPower(hero.weaponDamage, mainStatValue) * atkTacticMult * (1 + (hero.gearDamagePercent ?? 0) / 100);
-  const heroDefenseValue = heroDefense(hero.armorFromGear, hero.stats.vitality) * defTacticMult;
+    attackPower(hero.weaponDamage, mainStatValue) *
+    atkTacticMult *
+    (1 + (hero.gearDamagePercent ?? 0) / 100) *
+    (1 + potions.atkBonus() / 100);
+  const heroDefenseValue = heroDefense(hero.armorFromGear, hero.stats.vitality) * defTacticMult * (1 + potions.defBonus() / 100);
   const heroMaxHpValue = heroMaxHp(hero.stats.vitality, hero.level) + (hero.bonusMaxHp ?? 0);
   const heroDex = hero.stats.dexterity;
 
@@ -248,6 +253,13 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
       } else {
         return "LOSE";
       }
+    } else {
+      const potionHeal = potions.tryHealthPotion(heroHp / heroMaxHpValue);
+      if (potionHeal) {
+        const healAmount = Math.min(heroMaxHpValue - heroHp, heroMaxHpValue * potionHeal.healPercent);
+        heroHp += healAmount;
+        pushStatus(turn, "hero", potionHeal.statusLine, heroHp);
+      }
     }
 
     if (hero.classKey === "PALADIN" && !paladinHealUsed && heroHp / heroMaxHpValue < 0.4) {
@@ -287,6 +299,9 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
   const heroGoesFirst = heroInit >= monsterInit;
 
   for (const line of abilities.onBattleStart(heroGoesFirst)) {
+    pushStatus(1, "hero", line);
+  }
+  for (const line of potions.onBattleStart()) {
     pushStatus(1, "hero", line);
   }
 
@@ -384,6 +399,7 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
       heroHpEnd: heroHp,
       monsterHpStart: monsterMaxHpValue,
       monsterHpEnd: monsterHp,
+      potionsConsumed: potions.consumedKeys(),
     };
   }
 }

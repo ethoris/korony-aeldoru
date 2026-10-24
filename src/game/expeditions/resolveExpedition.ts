@@ -39,6 +39,8 @@ export interface ExpeditionResolution {
   /** Minuty rany (0 = brak); 30 jeśli przegrana walka była z bossem, inaczej 15. */
   injuredMinutes: number;
   fightsSinceRareDropAfter: number;
+  /** Klucze mikstur bojowych zużytych w którejkolwiek walce tej wyprawy (do odliczenia z zapasów). */
+  potionsConsumed: string[];
 }
 
 export interface ResolveExpeditionParams {
@@ -53,6 +55,7 @@ export interface ResolveExpeditionParams {
   fightsSinceRareDrop: number;
   equippedItems: EquippedItemSummary[];
   selectedAbilities?: string[];
+  selectedPotions?: string[];
   spellElement?: Element;
 }
 
@@ -81,6 +84,7 @@ export function resolveExpedition(params: ResolveExpeditionParams): ExpeditionRe
     spellElement: params.spellElement,
     equippedItems: params.equippedItems,
     selectedAbilities: params.selectedAbilities,
+    selectedPotions: params.selectedPotions,
   });
 
   const goldBonusPercent = sumGearPercent(params.equippedItems, "goldFromExpeditionsPercent");
@@ -165,6 +169,7 @@ export function resolveExpedition(params: ResolveExpeditionParams): ExpeditionRe
   const totalXp = fights.reduce((sum, f) => sum + f.xpGained, 0);
   const totalGoldDelta = fights.reduce((sum, f) => sum + f.goldDelta, 0);
   const injuredMinutes = lastFight.battle.result === "LOSE" ? (lastFight.isBoss ? 30 : 15) : 0;
+  const potionsConsumed = Array.from(new Set(fights.flatMap((f) => f.battle.potionsConsumed)));
 
   return {
     fights,
@@ -173,5 +178,6 @@ export function resolveExpedition(params: ResolveExpeditionParams): ExpeditionRe
     totalGoldDelta,
     injuredMinutes,
     fightsSinceRareDropAfter: pity,
+    potionsConsumed,
   };
 }

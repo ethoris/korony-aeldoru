@@ -10,6 +10,7 @@ import { generateReport } from "@/game/combat/generateReport";
 import { EXPEDITION_KINDS } from "@/game/data/expeditionKinds";
 import { AFFIXES } from "@/game/data/itemAffixes";
 import { getLocation, LOCATIONS } from "@/game/data/locations";
+import { MAX_BELT_POTIONS, getPotion } from "@/game/data/potions";
 import { getMonster } from "@/game/data/monsters";
 import { resolveExpedition } from "@/game/expeditions/resolveExpedition";
 import type { ItemAffixInstance } from "@/game/items/types";
@@ -75,6 +76,7 @@ export async function startExpedition(
   tactic: Tactic,
   selectedAbilities: string[] = [],
   spellElement: Element | null = null,
+  selectedPotions: string[] = [],
 ): Promise<StartExpeditionError | { expeditionId: string; endAt: Date }> {
   const character = await prisma.character.findUniqueOrThrow({ where: { id: characterId } });
   const now = new Date();
@@ -86,6 +88,21 @@ export async function startExpedition(
   const abilityValidation = validateAbilitySelection(character.class, character.level, selectedAbilities);
   if (!abilityValidation.ok) {
     return { error: abilityValidation.error };
+  }
+
+  const uniquePotions = Array.from(new Set(selectedPotions));
+  if (uniquePotions.length > MAX_BELT_POTIONS) {
+    return { error: `Możesz zabrać maksymalnie ${MAX_BELT_POTIONS} mikstury.` };
+  }
+  for (const key of uniquePotions) {
+    const potion = getPotion(key);
+    if (!potion || potion.kind !== "COMBAT") {
+      return { error: `Mikstury "${key}" nie można zabrać na wyprawę.` };
+    }
+    const owned = await prisma.consumable.findUnique({ where: { characterId_kind: { characterId, kind: key } } });
+    if (!owned || owned.quantity <= 0) {
+      return { error: `Nie masz mikstury: ${potion.name}.` };
+    }
   }
 
   const activeExpedition = await prisma.expedition.findFirst({
@@ -165,6 +182,7 @@ export async function startExpedition(
         endAt,
         abilities: abilityValidation.selected,
         spellElement: character.class === "MAGE" ? spellElement ?? "fire" : null,
+        potions: uniquePotions,
       },
     });
 
@@ -172,7 +190,7 @@ export async function startExpedition(
       data: {
         characterId,
         type: "wyprawa: start",
-        details: { location: locationKey, kind, tactic, abilities: abilityValidation.selected },
+        details: { location: locationKey, kind, tactic, abilities: abilityValidation.selected, potions: uniquePotions },
       },
     });
 
@@ -192,6 +210,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
     const location = getLocation(expedition.locationKey);
     const equippedItems = await loadEquippedItems(tx, character.id);
     const selectedAbilities = (expedition.abilities as unknown as string[]) ?? [];
+    const selectedPotions = (expedition.potions as unknown as string[]) ?? [];
     const spellElement = expedition.spellElement as Element | null;
 
     const resolution = resolveExpedition({
@@ -211,6 +230,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       fightsSinceRareDrop: character.fightsSinceRareDrop,
       equippedItems,
       selectedAbilities,
+      selectedPotions,
       spellElement: spellElement ?? undefined,
     });
 
@@ -268,6 +288,13 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
 
     await tx.expedition.update({ where: { id: expedition.id }, data: { settled: true } });
 
+    for (const potionKey of resolution.potionsConsumed) {
+      await tx.consumable.updateMany({
+        where: { characterId: character.id, kind: potionKey, quantity: { gt: 0 } },
+        data: { quantity: { decrement: 1 } },
+      });
+    }
+
     if (resolution.totalGoldDelta !== 0) {
       await tx.goldEvent.create({
         data: {
@@ -298,6 +325,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       spellElement: spellElement ?? undefined,
       equippedItems,
       selectedAbilities,
+      selectedPotions,
     });
 
     const allLines: string[][] = [];

@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Nieprawidłowe dane." }, { status: 400 });
   }
 
-  const { locationKey, kind, tactic, abilities, spellElement } = body as Record<string, unknown>;
+  const { locationKey, kind, tactic, abilities, spellElement, potions } = body as Record<string, unknown>;
 
   if (typeof locationKey !== "string") {
     return NextResponse.json({ error: "Wybierz lokację." }, { status: 400 });
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     typeof spellElement === "string" && VALID_SPELL_ELEMENTS.includes(spellElement as Element)
       ? (spellElement as Element)
       : null;
+  const selectedPotions = Array.isArray(potions) ? potions.filter((p): p is string => typeof p === "string") : [];
 
   const result = await startExpedition(
     character.id,
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
     resolvedTactic,
     selectedAbilities,
     resolvedSpellElement,
+    selectedPotions,
   );
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: 400 });

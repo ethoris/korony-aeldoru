@@ -6,6 +6,7 @@ import { abilitiesForClass } from "@/game/data/abilities";
 import { EXPEDITION_KINDS } from "@/game/data/expeditionKinds";
 import { LOCATIONS } from "@/game/data/locations";
 import { getMonster } from "@/game/data/monsters";
+import { POTIONS } from "@/game/data/potions";
 import { getCharacterForUser, syncCharacter } from "@/lib/expeditions";
 import { prisma } from "@/lib/prisma";
 
@@ -46,6 +47,12 @@ export default async function ExpeditionsPage() {
     .filter((a) => unlockedKeys.has(a.key))
     .map((a) => ({ key: a.key, name: a.name, effectText: a.effectText }));
 
+  const consumables = await prisma.consumable.findMany({ where: { characterId: fresh.id } });
+  const ownedByKind = new Map(consumables.map((c) => [c.kind, c.quantity]));
+  const combatPotions = Object.values(POTIONS)
+    .filter((p) => p.kind === "COMBAT" && (ownedByKind.get(p.key) ?? 0) > 0)
+    .map((p) => ({ key: p.key, name: p.name, effectText: p.effectText, owned: ownedByKind.get(p.key) ?? 0 }));
+
   return (
     <main className="flex flex-1 justify-center p-4">
       <ExpeditionsClient
@@ -56,6 +63,7 @@ export default async function ExpeditionsPage() {
           classKey: fresh.class,
         }}
         selectableAbilities={selectableAbilities}
+        ownedCombatPotions={combatPotions}
         activeExpedition={
           activeExpedition
             ? { locationKey: activeExpedition.locationKey, kind: activeExpedition.kind, endAt: activeExpedition.endAt.toISOString() }

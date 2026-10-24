@@ -51,6 +51,8 @@ export interface HeroConfig {
    * klas"); zdolność z poziomu 1 jest dodawana automatycznie przez silnik.
    */
   selectedAbilities?: string[];
+  /** Do 3 mikstur z pasa na tę wyprawę (docs/gdd/11-gospodarka-i-zadania.md). */
+  selectedPotions?: string[];
   /** Procentowe cechy z ekwipunku (docs/gdd/08-ekwipunek.md, "Losowe cechy"). */
   gearDamagePercent?: number;
   gearCritPercent?: number;
@@ -115,4 +117,6 @@ export interface BattleOutcome {
   heroHpEnd: number;
   monsterHpStart: number;
   monsterHpEnd: number;
+  /** Klucze mikstur bojowych faktycznie użytych w tej walce (do odliczenia z zapasów). */
+  potionsConsumed: string[];
 }
