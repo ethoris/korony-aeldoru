@@ -11,6 +11,10 @@ export interface ClassDefinition {
   armorMultiplier: number;
   /** Liczba ataków bohatera na turę (Łotr ma 2). */
   attacksPerTurn: number;
+  /** Opisy z docs/gdd/00-glowny.md, do ekranu tworzenia bohatera. */
+  style: string;
+  strongPoint: string;
+  weakPoint: string;
 }
 
 export const CLASSES: Record<ClassKey, ClassDefinition> = {
@@ -22,6 +26,9 @@ export const CLASSES: Record<ClassKey, ClassDefinition> = {
     weaponMultiplier: 1.45,
     armorMultiplier: 1.0,
     attacksPerTurn: 1,
+    style: "broń dwuręczna",
+    strongPoint: "najwyższe obrażenia",
+    weakPoint: "niska obrona",
   },
   PALADIN: {
     key: "PALADIN",
@@ -31,6 +38,9 @@ export const CLASSES: Record<ClassKey, ClassDefinition> = {
     weaponMultiplier: 0.65,
     armorMultiplier: 0.6,
     attacksPerTurn: 1,
+    style: "miecz i tarcza",
+    strongPoint: "blok 15% ciosów, leczy się raz na walkę",
+    weakPoint: "wolne zabijanie",
   },
   ARCHER: {
     key: "ARCHER",
@@ -40,6 +50,9 @@ export const CLASSES: Record<ClassKey, ClassDefinition> = {
     weaponMultiplier: 0.95,
     armorMultiplier: 0.8,
     attacksPerTurn: 1,
+    style: "łuk",
+    strongPoint: "1 darmowy strzał przed walką wręcz",
+    weakPoint: "słabszy w zwarciu",
   },
   ROGUE: {
     key: "ROGUE",
@@ -49,6 +62,9 @@ export const CLASSES: Record<ClassKey, ClassDefinition> = {
     weaponMultiplier: 0.55,
     armorMultiplier: 0.8,
     attacksPerTurn: 2,
+    style: "dwa sztylety",
+    strongPoint: "2 ataki na turę, krytyki",
+    weakPoint: "mało punktów życia",
   },
   MAGE: {
     key: "MAGE",
@@ -58,6 +74,9 @@ export const CLASSES: Record<ClassKey, ClassDefinition> = {
     weaponMultiplier: 1.35,
     armorMultiplier: 0.6,
     attacksPerTurn: 1,
+    style: "zaklęcia",
+    strongPoint: "obrażenia ignorują pancerz",
+    weakPoint: "najsłabszy pancerz",
   },
   PRIEST: {
     key: "PRIEST",
@@ -67,6 +86,9 @@ export const CLASSES: Record<ClassKey, ClassDefinition> = {
     weaponMultiplier: 0.75,
     armorMultiplier: 0.9,
     attacksPerTurn: 1,
+    style: "buława i modlitwy",
+    strongPoint: "leczenie co 3 tury, mocny przeciw nieumarłym",
+    weakPoint: "niskie obrażenia",
   },
 };
 

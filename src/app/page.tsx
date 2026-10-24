@@ -2,16 +2,27 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { auth, signOut } from "@/auth";
+import { prisma } from "@/lib/prisma";
 
 async function AccountStatus() {
   const session = await auth();
 
   if (session?.user) {
+    const character = await prisma.character.findUnique({
+      where: { userId_server: { userId: session.user.id, server: "Valmor" } },
+      select: { name: true },
+    });
+
     return (
       <div className="flex flex-col items-center gap-3">
         <p className="text-muted">
           Zalogowano jako <span className="text-foreground">{session.user.email}</span>
         </p>
+
+        <Link href={character ? "/character" : "/character/new"} className="rounded bg-accent px-6 py-3 font-semibold text-background">
+          {character ? `Twój bohater: ${character.name}` : "Stwórz bohatera"}
+        </Link>
+
         <form
           action={async () => {
             "use server";

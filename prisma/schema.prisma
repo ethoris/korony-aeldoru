@@ -77,14 +77,18 @@ enum Deity {
 }
 
 model Character {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  server String @default("Valmor")
-  name   String @unique
-  race   Race
-  class  Class
-  deity  Deity
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  server  String @default("Valmor")
+  name    String
+  // Znormalizowana wersja imienia (bez polskich znaków, małe litery) – unikalność
+  // na serwerze ma być niezależna od wielkości liter i polskich znaków
+  // (docs/gdd/01-bohater-i-konto.md: „Łukasz” blokuje „lukasz” i „ŁUKASZ”).
+  nameKey String
+  race    Race
+  class   Class
+  deity   Deity
 
   level      Int @default(1)
   experience Int @default(0)
@@ -102,6 +106,10 @@ model Character {
   staminaUpdatedAt DateTime  @default(now())
   injuredUntil     DateTime?
 
+  // Pierwszy reset statystyk od poziomu 21 jest darmowy, ale tylko raz na
+  // konto postaci (docs/gdd/01-bohater-i-konto.md).
+  usedFreeResetAfter20 Boolean @default(false)
+
   createdAt DateTime @default(now())
 
   items          Item[]
@@ -111,12 +119,26 @@ model Character {
   questsProgress QuestProgress[]
   titles         CharacterTitle[]
   nameHistory    NameHistoryEntry[]
+  statResets     StatResetEvent[]
   goldEvents     GoldEvent[]
   itemEvents     ItemEvent[]
   gameEvents     GameEvent[]
 
-  @@index([userId])
+  @@unique([server, nameKey])
+  @@unique([userId, server])
   @@map("characters")
+}
+
+model StatResetEvent {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  paid        Boolean
+  goldCost    Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@index([characterId, createdAt])
+  @@map("stat_reset_events")
 }
 
 model NameHistoryEntry {
