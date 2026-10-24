@@ -136,6 +136,8 @@ model Character {
   fortress       Fortress?
   raidsSent      Raid[]             @relation("RaidAttacker")
   raidsReceived  Raid[]             @relation("RaidDefender")
+  guildLed       Guild?             @relation("GuildLeader")
+  guildMembership GuildMember?
 
   @@unique([server, nameKey])
   @@unique([userId, server])
@@ -492,6 +494,42 @@ model Raid {
   @@index([attackerCharacterId])
   @@index([defenderCharacterId])
   @@map("raids")
+}
+
+// --- Gildie (wersja 4, docs/gdd/00-glowny.md, docs/gdd/01-bohater-i-konto.md) ---
+
+enum GuildRole {
+  LEADER
+  MEMBER
+}
+
+model Guild {
+  id                String        @id @default(cuid())
+  name              String
+  nameKey           String        @unique
+  tag               String
+  tagKey            String        @unique
+  leaderCharacterId String        @unique
+  leaderCharacter   Character     @relation("GuildLeader", fields: [leaderCharacterId], references: [id])
+  treasuryGold      Int           @default(0)
+  nameChangedAt     DateTime?
+  createdAt         DateTime      @default(now())
+  members           GuildMember[]
+
+  @@map("guilds")
+}
+
+model GuildMember {
+  id          String    @id @default(cuid())
+  guildId     String
+  guild       Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  characterId String    @unique
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  role        GuildRole @default(MEMBER)
+  joinedAt    DateTime  @default(now())
+
+  @@index([guildId])
+  @@map("guild_members")
 }
 
 model GameEvent {

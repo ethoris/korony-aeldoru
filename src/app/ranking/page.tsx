@@ -13,7 +13,15 @@ export default async function RankingPage() {
   const characters = await prisma.character.findMany({
     orderBy: [{ level: "desc" }, { experience: "desc" }, { fame: "desc" }],
     take: 50,
-    select: { id: true, name: true, race: true, class: true, level: true, fame: true },
+    select: {
+      id: true,
+      name: true,
+      race: true,
+      class: true,
+      level: true,
+      fame: true,
+      guildMembership: { select: { guild: { select: { tag: true } } } },
+    },
   });
 
   return (
@@ -39,7 +47,12 @@ export default async function RankingPage() {
               {characters.map((character, index) => (
                 <tr key={character.id} className="border-b border-line/50">
                   <td className="py-2 text-muted">{index + 1}</td>
-                  <td className="py-2 text-foreground">{character.name}</td>
+                  <td className="py-2 text-foreground">
+                    {character.guildMembership && (
+                      <span className="text-muted">[{character.guildMembership.guild.tag}] </span>
+                    )}
+                    {character.name}
+                  </td>
                   <td className="py-2 text-muted">
                     {RACES[character.race].name} · {CLASSES[character.class].name}
                   </td>
