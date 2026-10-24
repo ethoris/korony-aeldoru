@@ -200,6 +200,9 @@ export function CharacterStatsPanel({ character }: { character: CharacterData })
           <Link href="/czat" className="rounded border border-line px-4 py-2 text-sm text-foreground">
             Czat
           </Link>
+          <Link href="/mapa" className="rounded border border-line px-4 py-2 text-sm text-foreground">
+            Mapa
+          </Link>
           <Link href="/ranking" className="rounded border border-line px-4 py-2 text-sm text-foreground">
             Ranking
           </Link>

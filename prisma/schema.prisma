@@ -147,6 +147,8 @@ model Character {
   reportsMade           Report[]       @relation("ReportReporter")
   reportsReceived       Report[]       @relation("ReportTarget")
   sanctions             Sanction[]
+  provincesOwned        ProvinceState[] @relation("ProvinceOwner")
+  siegesLed             Siege[]        @relation("SiegeAttacker")
 
   @@unique([server, nameKey])
   @@unique([userId, server])
@@ -645,6 +647,59 @@ model Sanction {
 
   @@index([characterId, type])
   @@map("sanctions")
+}
+
+// --- Prowincje i oblężenia (wersja 4, docs/gdd/10-prowincje.md, 09-twierdza-i-wojna.md) ---
+
+// klucz z src/game/data/provinces.ts; wiersz istnieje tylko dla prowincji, która kiedyś miała właściciela.
+// Własność jest per-postać (docs/gdd/09-twierdza-i-wojna.md: "1 prowincja na gracza, maks. 6 na gildię" –
+// limit gildii liczy sumę prowincji jej obecnych członków, bez osobnego pola na gildię tutaj.
+model ProvinceState {
+  id              String    @id @default(cuid())
+  provinceKey     String    @unique
+  ownerCharacterId String?
+  ownerCharacter  Character? @relation("ProvinceOwner", fields: [ownerCharacterId], references: [id], onDelete: SetNull)
+  capturedAt      DateTime?
+  // 48h ochrony po zdobyciu (docs/gdd/09-twierdza-i-wojna.md)
+  protectionUntil DateTime?
+
+  @@map("province_states")
+}
+
+enum SiegeResult {
+  ATTACKER_WIN
+  DEFENDER_WIN
+}
+
+// prowincja, gildia, ogłoszono, termin bitwy, wynik (docs/gdd/13-technika.md)
+model Siege {
+  id                  String        @id @default(cuid())
+  provinceKey         String
+  attackerCharacterId String
+  attackerCharacter   Character     @relation("SiegeAttacker", fields: [attackerCharacterId], references: [id], onDelete: Cascade)
+  // armia zgłoszona przez atakującego przy ogłoszeniu: Record<klucz jednostki, liczba>
+  army                Json
+  announcedAt         DateTime      @default(now())
+  battleAt            DateTime
+  resolved            Boolean       @default(false)
+  result              SiegeResult?
+  report              Json          @default("[]")
+  reinforcements      SiegeReinforcement[]
+
+  @@index([provinceKey])
+  @@map("sieges")
+}
+
+model SiegeReinforcement {
+  id                  String   @id @default(cuid())
+  siegeId             String
+  siege               Siege    @relation(fields: [siegeId], references: [id], onDelete: Cascade)
+  defenderCharacterId String
+  army                Json
+  sentAt              DateTime @default(now())
+
+  @@index([siegeId])
+  @@map("siege_reinforcements")
 }
 
 model GameEvent {

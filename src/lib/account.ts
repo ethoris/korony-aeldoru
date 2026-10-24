@@ -1,5 +1,6 @@
 import "server-only";
 
+import { leaveGuild } from "@/lib/guilds";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 
@@ -42,6 +43,15 @@ export async function deleteAccount(userId: string, password: string): Promise<D
 
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) return { error: "Hasło jest nieprawidłowe." };
+
+  // Przywódca gildii musi najpierw oddać przywództwo (albo rozwiązać gildię,
+  // gdy jest ostatnim członkiem) – inaczej usunięcie postaci złamałoby
+  // ograniczenie klucza obcego Guild.leaderCharacterId.
+  const character = await prisma.character.findFirst({ where: { userId } });
+  if (character) {
+    const membership = await prisma.guildMember.findUnique({ where: { characterId: character.id } });
+    if (membership) await leaveGuild(character.id);
+  }
 
   await prisma.user.delete({ where: { id: userId } });
 
