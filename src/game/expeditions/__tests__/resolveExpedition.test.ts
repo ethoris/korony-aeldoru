@@ -35,6 +35,7 @@ const baseParams = {
   startingGoldPouch: 100,
   fightsSinceRareDrop: 0,
   equippedItems: equipmentFor(10),
+  deity: "KORGATH" as const,
 };
 
 const level1Params = {
@@ -107,6 +108,21 @@ describe("resolveExpedition", () => {
 
     expect(foundNormalLoss).toBe(true);
     expect(foundBossLoss).toBe(true);
+  });
+
+  it("bóstwo Morrak zmniejsza ranę i stratę złota po przegranej o 25%", () => {
+    const location = getLocation("goblinia-nora");
+
+    for (let seed = 1; seed <= 500; seed++) {
+      const normal = resolveExpedition({ ...level1Params, location, kind: "HUNT", seed });
+      const withMorrak = resolveExpedition({ ...level1Params, location, kind: "HUNT", seed, deity: "MORRAK" });
+      if (normal.overallResult !== "LOSE") continue;
+
+      expect(withMorrak.injuredMinutes).toBe(Math.round(normal.injuredMinutes * 0.75));
+      expect(withMorrak.totalGoldDelta).toBe(Math.round(normal.totalGoldDelta * 0.75));
+      return;
+    }
+    throw new Error("żaden z 500 seedów nie dał przegranej do porównania");
   });
 
   it("wygrana daje pełne PD, przegrana 30%, remis/odwrót 50%", () => {

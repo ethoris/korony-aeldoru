@@ -60,6 +60,8 @@ export interface HeroConfig {
   gearBlockPercent?: number;
   /** Żywioł broni z cechy "żywiołu broni" (zamiast fizycznych obrażeń), gdy przedmiot ją ma. */
   gearWeaponElement?: Element;
+  /** Bonus bóstwa Solaris do skuteczności leczenia w walce (docs/gdd/00-glowny.md). */
+  healBonusPercent?: number;
 }
 
 export interface MonsterConfig {

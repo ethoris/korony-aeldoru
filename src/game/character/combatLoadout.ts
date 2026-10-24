@@ -1,5 +1,7 @@
 import { computeArmorTotal, computeShieldArmor, computeWeaponDamage } from "@/game/combat/equipment";
 import type { ClassKey, Element, HeroConfig, Stats, Tactic } from "@/game/combat/types";
+import { deityCombatBonuses } from "@/game/data/deities";
+import type { DeityKey } from "@/game/data/deities";
 import { AFFIXES } from "@/game/data/itemAffixes";
 import type { ItemAffixInstance, ItemSlot } from "@/game/items/types";
 
@@ -61,6 +63,7 @@ export function buildHeroConfigFromEquipment(params: {
   equippedItems: EquippedItemSummary[];
   selectedAbilities?: string[];
   selectedPotions?: string[];
+  deity?: DeityKey;
 }): HeroConfig {
   const weapon = params.equippedItems.find((i) => i.slot === "WEAPON");
   const weaponDamage =
@@ -116,6 +119,10 @@ export function buildHeroConfigFromEquipment(params: {
     }
   }
 
+  const deityBonus = params.deity
+    ? deityCombatBonuses(params.deity, params.classKey)
+    : { damagePercent: 0, critPercent: 0, hitPercent: 0, healPercent: 0 };
+
   return {
     classKey: params.classKey,
     level: params.level,
@@ -129,10 +136,11 @@ export function buildHeroConfigFromEquipment(params: {
     bonusMaxHp,
     selectedAbilities: params.selectedAbilities,
     selectedPotions: params.selectedPotions,
-    gearDamagePercent,
-    gearCritPercent: Math.min(gearCritPercent, AFFIXES.critPercent.cap ?? Infinity),
-    gearHitPercent,
+    gearDamagePercent: gearDamagePercent + deityBonus.damagePercent,
+    gearCritPercent: Math.min(gearCritPercent + deityBonus.critPercent, AFFIXES.critPercent.cap ?? Infinity),
+    gearHitPercent: gearHitPercent + deityBonus.hitPercent,
     gearBlockPercent,
     gearWeaponElement,
+    healBonusPercent: deityBonus.healPercent,
   };
 }

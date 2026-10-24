@@ -229,6 +229,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       seed: Number(expedition.seed),
       startingGoldPouch: character.goldPouch,
       fightsSinceRareDrop: character.fightsSinceRareDrop,
+      deity: character.deity,
       equippedItems,
       selectedAbilities,
       selectedPotions,
@@ -334,6 +335,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       spellElement: spellElement ?? undefined,
       equippedItems,
       selectedAbilities,
+      deity: character.deity,
       selectedPotions,
     });
 

@@ -96,6 +96,7 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
   const tactic = hero.tactic ?? "BALANCED";
   const abilities = new AbilityRuntime(hero.classKey, hero.level, hero.selectedAbilities ?? []);
   const potions = new PotionRuntime(hero.selectedPotions ?? [], monster.isBoss);
+  const healMult = 1 + (hero.healBonusPercent ?? 0) / 100;
 
   const atkTacticMult = tactic === "AGGRESSIVE" ? 1.15 : tactic === "DEFENSIVE" ? 0.85 : 1;
   const defTacticMult = tactic === "AGGRESSIVE" ? 0.85 : tactic === "DEFENSIVE" ? 1.15 : 1;
@@ -256,14 +257,14 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
     } else {
       const potionHeal = potions.tryHealthPotion(heroHp / heroMaxHpValue);
       if (potionHeal) {
-        const healAmount = Math.min(heroMaxHpValue - heroHp, heroMaxHpValue * potionHeal.healPercent);
+        const healAmount = Math.min(heroMaxHpValue - heroHp, heroMaxHpValue * potionHeal.healPercent * healMult);
         heroHp += healAmount;
         pushStatus(turn, "hero", potionHeal.statusLine, heroHp);
       }
     }
 
     if (hero.classKey === "PALADIN" && !paladinHealUsed && heroHp / heroMaxHpValue < 0.4) {
-      const healAmount = Math.min(heroMaxHpValue - heroHp, heroMaxHpValue * 0.2);
+      const healAmount = Math.min(heroMaxHpValue - heroHp, heroMaxHpValue * 0.2 * healMult);
       heroHp += healAmount;
       paladinHealUsed = true;
       events.push({ kind: "heal", turn, actor: "hero", amount: healAmount, targetHpAfter: heroHp });
@@ -278,7 +279,7 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
 
   function priestSelfHeal(turn: number): void {
     if (hero.classKey !== "PRIEST" || turn % 3 !== 0 || heroHp >= heroMaxHpValue) return;
-    const healAmount = Math.min(heroMaxHpValue - heroHp, heroMaxHpValue * 0.15);
+    const healAmount = Math.min(heroMaxHpValue - heroHp, heroMaxHpValue * 0.15 * healMult);
     if (healAmount <= 0) return;
     heroHp += healAmount;
     events.push({ kind: "heal", turn, actor: "hero", amount: healAmount, targetHpAfter: heroHp });
@@ -316,7 +317,7 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
       if (side === "hero") {
         const hotPercent = abilities.tickHeroHots();
         if (hotPercent > 0 && heroHp < heroMaxHpValue) {
-          const healAmount = Math.min(heroMaxHpValue - heroHp, heroMaxHpValue * hotPercent);
+          const healAmount = Math.min(heroMaxHpValue - heroHp, heroMaxHpValue * hotPercent * healMult);
           if (healAmount > 0) {
             heroHp += healAmount;
             events.push({ kind: "heal", turn, actor: "hero", amount: healAmount, targetHpAfter: heroHp });

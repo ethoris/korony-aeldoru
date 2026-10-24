@@ -3,6 +3,8 @@ import type { EquippedItemSummary } from "@/game/character/combatLoadout";
 import { createRng, randomInt } from "@/game/combat/rng";
 import { simulateBattle } from "@/game/combat/simulate";
 import type { BattleOutcome, BattleResult, ClassKey, Element, ExpeditionKind, MonsterConfig, Stats, Tactic } from "@/game/combat/types";
+import { deityExpeditionBonuses, deityLossReduction } from "@/game/data/deities";
+import type { DeityKey } from "@/game/data/deities";
 import { EXPEDITION_KINDS } from "@/game/data/expeditionKinds";
 import { AFFIXES } from "@/game/data/itemAffixes";
 import type { LocationDefinition } from "@/game/data/locations";
@@ -57,6 +59,7 @@ export interface ResolveExpeditionParams {
   selectedAbilities?: string[];
   selectedPotions?: string[];
   spellElement?: Element;
+  deity: DeityKey;
 }
 
 function toMonsterConfig(key: string): MonsterConfig {
@@ -85,10 +88,13 @@ export function resolveExpedition(params: ResolveExpeditionParams): ExpeditionRe
     equippedItems: params.equippedItems,
     selectedAbilities: params.selectedAbilities,
     selectedPotions: params.selectedPotions,
+    deity: params.deity,
   });
 
-  const goldBonusPercent = sumGearPercent(params.equippedItems, "goldFromExpeditionsPercent");
-  const xpBonusPercent = sumGearPercent(params.equippedItems, "experiencePercent");
+  const deityExpedition = deityExpeditionBonuses(params.deity);
+  const goldBonusPercent = sumGearPercent(params.equippedItems, "goldFromExpeditionsPercent") + deityExpedition.goldPercent;
+  const xpBonusPercent = sumGearPercent(params.equippedItems, "experiencePercent") + deityExpedition.xpPercent;
+  const lossReduction = deityLossReduction(params.deity);
 
   const fights: FightOutcome[] = [];
   let runningGold = params.startingGoldPouch;
@@ -143,7 +149,7 @@ export function resolveExpedition(params: ResolveExpeditionParams): ExpeditionRe
       }
     } else if (battle.result === "LOSE") {
       xpGained = Math.round(fullXp * 0.3 * (1 + xpBonusPercent / 100));
-      const penalty = Math.round(runningGold * 0.05);
+      const penalty = Math.round(runningGold * 0.05 * (1 - lossReduction));
       goldDelta = -penalty;
       runningGold -= penalty;
     } else {
@@ -168,7 +174,8 @@ export function resolveExpedition(params: ResolveExpeditionParams): ExpeditionRe
   const lastFight = fights[fights.length - 1];
   const totalXp = fights.reduce((sum, f) => sum + f.xpGained, 0);
   const totalGoldDelta = fights.reduce((sum, f) => sum + f.goldDelta, 0);
-  const injuredMinutes = lastFight.battle.result === "LOSE" ? (lastFight.isBoss ? 30 : 15) : 0;
+  const injuredMinutes =
+    lastFight.battle.result === "LOSE" ? Math.round((lastFight.isBoss ? 30 : 15) * (1 - lossReduction)) : 0;
   const potionsConsumed = Array.from(new Set(fights.flatMap((f) => f.battle.potionsConsumed)));
 
   return {

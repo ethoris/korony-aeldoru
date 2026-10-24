@@ -69,4 +69,27 @@ describe("buildHeroConfigFromEquipment", () => {
 
     expect(hero.gearWeaponElement).toBeUndefined();
   });
+
+  it("bonus bóstwa wlicza się razem z cechami ekwipunku", () => {
+    const hero = buildHeroConfigFromEquipment({
+      ...baseParams,
+      equippedItems: [
+        { slot: "WEAPON", damageMin: 10, damageMax: 20, armor: null, traits: [{ key: "damagePercent", value: 3, label: "x" }] },
+      ],
+      deity: "KORGATH",
+    });
+
+    expect(hero.gearDamagePercent).toBe(8); // 3 z ekwipunku + 5 od Korgatha (klasa walcząca wręcz)
+  });
+
+  it("bonus Solaris do leczenia trafia na healBonusPercent", () => {
+    const hero = buildHeroConfigFromEquipment({ ...baseParams, classKey: "PRIEST", equippedItems: [], deity: "SOLARIS" });
+    expect(hero.healBonusPercent).toBe(10);
+  });
+
+  it("bez bóstwa nie dodaje żadnego bonusu", () => {
+    const hero = buildHeroConfigFromEquipment({ ...baseParams, equippedItems: [] });
+    expect(hero.gearDamagePercent).toBe(0);
+    expect(hero.healBonusPercent).toBe(0);
+  });
 });
