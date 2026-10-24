@@ -17,6 +17,8 @@ export type MonsterType =
 
 export type Tactic = "AGGRESSIVE" | "BALANCED" | "DEFENSIVE" | "RETREAT_30";
 
+export type ExpeditionKind = "SCOUT" | "HUNT" | "DEEP" | "BOSS";
+
 export interface Stats {
   strength: number;
   dexterity: number;
@@ -37,6 +39,11 @@ export interface HeroConfig {
   spellElement?: Element;
   /** Czy Paladyn ma tarczę (blok 15% ciosów). */
   hasShield?: boolean;
+  /**
+   * PŻ na start walki, gdy inne niż pełne (głęboka wyprawa: „bez leczenia
+   * między walkami” z docs/gdd/05-lokacje.md – HP przechodzi z poprzedniej walki).
+   */
+  startingHpOverride?: number;
 }
 
 export interface MonsterConfig {

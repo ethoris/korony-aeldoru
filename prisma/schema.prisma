@@ -110,6 +110,10 @@ model Character {
   // konto postaci (docs/gdd/01-bohater-i-konto.md).
   usedFreeResetAfter20 Boolean @default(false)
 
+  // Ochrona przed pechem (docs/gdd/08-ekwipunek.md): po 20 walkach z rzędu
+  // bez rzadkiego lub lepszego przedmiotu następny przedmiot jest rzadki.
+  fightsSinceRareDrop Int @default(0)
+
   createdAt DateTime @default(now())
 
   items          Item[]
@@ -195,6 +199,10 @@ model Item {
   slot        ItemSlot
   level       Int
   quality     ItemQuality
+  // Klasa, dla której wylosowano przedmiot („dla kogo”, docs/gdd/08-ekwipunek.md:
+  // 70% zgodne z klasą gracza, 30% losowe) – dla broni/pancerza wpływa też
+  // na typ broni i mnożnik pancerza użyty przy generowaniu.
+  forClass    Class
 
   damageMin Int?
   damageMax Int?
@@ -239,10 +247,15 @@ model Expedition {
   tactic      Tactic         @default(BALANCED)
   abilities   Json           @default("[]") // do 3 wybranych kluczy zdolności
   potions     Json           @default("[]")
+  // Ziarno walk tej wyprawy – zapisane przy starcie, żeby rozliczenie
+  // przy wejściu (bez procesów w tle) dało zawsze ten sam wynik.
+  seed        BigInt
 
   startAt DateTime @default(now())
   endAt   DateTime
   settled Boolean  @default(false)
+
+  battleReports BattleReport[]
 
   @@index([characterId])
   @@map("expeditions")
@@ -256,9 +269,11 @@ enum BattleResult {
 }
 
 model BattleReport {
-  id          String    @id @default(cuid())
-  characterId String
-  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  id           String      @id @default(cuid())
+  characterId  String
+  character    Character   @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  expeditionId String?
+  expedition   Expedition? @relation(fields: [expeditionId], references: [id], onDelete: SetNull)
 
   opponentKey String
   seed        BigInt
@@ -269,6 +284,7 @@ model BattleReport {
   createdAt DateTime @default(now())
 
   @@index([characterId])
+  @@index([expeditionId])
   @@map("battle_reports")
 }
 

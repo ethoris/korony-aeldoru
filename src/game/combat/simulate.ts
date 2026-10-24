@@ -99,7 +99,11 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
   const monsterDef = monsterDefense(monster.level, monster.isBoss);
   const monsterDex = monsterDexterity(monster.level);
 
-  let heroHp = heroMaxHpValue;
+  let heroHp =
+    hero.startingHpOverride !== undefined
+      ? Math.min(heroMaxHpValue, Math.max(1, hero.startingHpOverride))
+      : heroMaxHpValue;
+  const heroHpAtStart = heroHp;
   let monsterHp = monsterMaxHpValue;
 
   const events: BattleEvent[] = [];
@@ -258,7 +262,7 @@ export function simulateBattle(hero: HeroConfig, monster: MonsterConfig, seed: n
       result: finalResult,
       turnsTaken: finalTurns,
       events,
-      heroHpStart: heroMaxHpValue,
+      heroHpStart: heroHpAtStart,
       heroHpEnd: heroHp,
       monsterHpStart: monsterMaxHpValue,
       monsterHpEnd: monsterHp,

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { computeDerivedStats } from "@/game/character/derivedStats";
@@ -170,6 +171,10 @@ export function CharacterStatsPanel({ character }: { character: CharacterData })
           <Stat label="Złoto" value={goldPouch} />
           <Stat label="Sława" value={character.fame} />
         </div>
+
+        <Link href="/expeditions" className="mt-4 inline-block rounded bg-accent px-4 py-2 text-sm font-semibold text-background">
+          Wyprawy
+        </Link>
       </div>
 
       <div className="rounded-lg border border-line bg-card p-6">
