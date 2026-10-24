@@ -134,6 +134,8 @@ model Character {
   gameEvents     GameEvent[]
   consumables    Consumable[]
   fortress       Fortress?
+  raidsSent      Raid[]             @relation("RaidAttacker")
+  raidsReceived  Raid[]             @relation("RaidDefender")
 
   @@unique([server, nameKey])
   @@unique([userId, server])
@@ -466,6 +468,30 @@ model Army {
 
   @@unique([fortressId, unitKey])
   @@map("armies")
+}
+
+enum RaidResult {
+  ATTACKER_WIN
+  DEFENDER_WIN
+}
+
+// docs/gdd/09-twierdza-i-wojna.md, docs/gdd/13-technika.md ("raids": atakujący, cel, armia, dotarcie, wynik)
+model Raid {
+  id                    String      @id @default(cuid())
+  attackerCharacterId   String
+  attackerCharacter     Character   @relation("RaidAttacker", fields: [attackerCharacterId], references: [id], onDelete: Cascade)
+  defenderCharacterId   String
+  defenderCharacter     Character   @relation("RaidDefender", fields: [defenderCharacterId], references: [id], onDelete: Cascade)
+  army                  Json // Record<klucz jednostki, liczba> wysłana
+  arrivalAt             DateTime // "dotarcie"
+  resolved              Boolean     @default(false)
+  result                RaidResult?
+  report                Json        @default("[]")
+  createdAt             DateTime    @default(now())
+
+  @@index([attackerCharacterId])
+  @@index([defenderCharacterId])
+  @@map("raids")
 }
 
 model GameEvent {
