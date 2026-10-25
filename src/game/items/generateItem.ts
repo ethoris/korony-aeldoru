@@ -188,4 +188,37 @@ export function generateLoot(params: GenerateItemParams): GeneratedItem | null {
   };
 }
 
+/** Zwykły (COMMON) przedmiot ze sklepu NPC: bez cech losowych (docs/gdd/08-ekwipunek.md: tylko magiczny+ ma cechy). */
+export function generateShopItem(slot: ItemSlot, level: number, playerClass: ClassKey): GeneratedItem {
+  const classDef = CLASSES[playerClass];
+
+  let damageMin: number | undefined;
+  let damageMax: number | undefined;
+  let armor: number | undefined;
+
+  if (slot === "WEAPON") {
+    const avg = computeWeaponDamage(playerClass, level, "COMMON");
+    damageMin = Math.round(avg * 0.85);
+    damageMax = Math.round(avg * 1.15);
+  } else if (slot === "OFFHAND" && playerClass === "PALADIN") {
+    armor = Math.round(computeShieldArmor(level, "COMMON"));
+  } else if (slot in ARMOR_SLOT_SHARE) {
+    armor = Math.round(computeArmorTotal(playerClass, level, "COMMON") * ARMOR_SLOT_SHARE[slot]);
+  }
+
+  const baseNoun = slot === "WEAPON" ? BASE_NOUN_BY_WEAPON_TYPE[classDef.weaponType] : BASE_NOUN_BY_SLOT[slot];
+
+  return {
+    slot,
+    level,
+    quality: "COMMON",
+    name: baseNoun,
+    damageMin,
+    damageMax,
+    armor,
+    affixes: [],
+    forClass: playerClass,
+  };
+}
+
 export { QUALITY_MULTIPLIER, ELEMENT_RESIST_AFFIX_WORDS };

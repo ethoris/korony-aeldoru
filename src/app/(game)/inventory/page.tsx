@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { getCharacterForUser } from "@/lib/expeditions";
 import { getFortressView } from "@/lib/fortress";
 import { prisma } from "@/lib/prisma";
+import { npcSellPrice } from "@/lib/shop";
 
 import { InventoryClient } from "./InventoryClient";
 
@@ -37,6 +38,7 @@ export default async function InventoryPage() {
     locked: item.locked,
     upgrade: item.upgrade,
     rune: item.rune,
+    sellPrice: npcSellPrice(item.level, item.quality),
   }));
 
   const fortress = await getFortressView(character.id);

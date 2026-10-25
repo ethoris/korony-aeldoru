@@ -12,12 +12,27 @@ interface PotionView {
   owned: number;
 }
 
+const SLOT_LABELS: Record<string, string> = {
+  WEAPON: "Broń",
+  OFFHAND: "Druga ręka",
+  HELMET: "Hełm",
+  ARMOR: "Zbroja",
+  GLOVES: "Rękawice",
+  BOOTS: "Buty",
+  AMULET: "Amulet",
+  RING: "Pierścień",
+};
+
 export function ShopClient({
   potions,
+  equipmentSlots,
+  equipmentPrice,
   goldPouch,
   injured,
 }: {
   potions: PotionView[];
+  equipmentSlots: string[];
+  equipmentPrice: number;
   goldPouch: number;
   injured: boolean;
 }) {
@@ -37,6 +52,23 @@ export function ShopClient({
     setPendingKey(null);
     if (!response.ok) {
       setError(data.error ?? "Nie udało się kupić mikstury.");
+      return;
+    }
+    router.refresh();
+  }
+
+  async function buyEquipment(slot: string) {
+    setError(null);
+    setPendingKey(slot);
+    const response = await fetch("/api/shop/buy-equipment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slot }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setPendingKey(null);
+    if (!response.ok) {
+      setError(data.error ?? "Nie udało się kupić przedmiotu.");
       return;
     }
     router.refresh();
@@ -70,6 +102,28 @@ export function ShopClient({
           Złoto: <span className="font-ui text-foreground">{goldPouch}</span>
         </p>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+      </div>
+
+      <div className="rounded-lg border border-line bg-card p-5">
+        <h2 className="font-display text-base font-bold text-foreground">Zwykły ekwipunek</h2>
+        <p className="mt-1 text-xs text-muted">
+          Zwykły przedmiot na twój poziom. Rzadsze i lepsze trafiają się tylko z łupów i targowiska.
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {equipmentSlots.map((slot) => (
+            <button
+              key={slot}
+              type="button"
+              disabled={pendingKey === slot || goldPouch < equipmentPrice}
+              onClick={() => buyEquipment(slot)}
+              className="rounded border border-line px-3 py-2 text-xs text-foreground disabled:opacity-40"
+            >
+              {SLOT_LABELS[slot] ?? slot}
+              <br />
+              <span className="text-muted">za {equipmentPrice}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="rounded-lg border border-line bg-card p-5">

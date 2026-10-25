@@ -27,6 +27,7 @@ interface ItemView {
   locked: boolean;
   upgrade: number;
   rune: string | null;
+  sellPrice: number;
 }
 
 const RUNE_LABELS: Record<string, string> = {
@@ -102,6 +103,19 @@ export function InventoryClient({
     setPendingId(null);
     if (!response.ok) {
       setError(data.error ?? "Nie udało się wykonać akcji.");
+      return;
+    }
+    router.refresh();
+  }
+
+  async function sell(itemId: string) {
+    setError(null);
+    setPendingId(itemId);
+    const response = await fetch(`/api/items/${itemId}/sell`, { method: "POST" });
+    const data = await response.json().catch(() => ({}));
+    setPendingId(null);
+    if (!response.ok) {
+      setError(data.error ?? "Nie udało się sprzedać przedmiotu.");
       return;
     }
     router.refresh();
@@ -256,14 +270,27 @@ export function InventoryClient({
                       </p>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    disabled={pendingId === item.id || item.locked}
-                    onClick={() => act(item.id, "equip")}
-                    className="shrink-0 rounded bg-accent px-3 py-1.5 text-xs font-semibold text-background disabled:opacity-40"
-                  >
-                    Załóż
-                  </button>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <button
+                      type="button"
+                      disabled={pendingId === item.id || item.locked}
+                      onClick={() => act(item.id, "equip")}
+                      className="rounded bg-accent px-3 py-1.5 text-xs font-semibold text-background disabled:opacity-40"
+                    >
+                      Załóż
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pendingId === item.id || item.locked}
+                      title={item.locked ? "Odblokuj kłódkę przed sprzedażą" : undefined}
+                      onClick={() => {
+                        if (confirm(`Sprzedać ${item.name} NPC za ${item.sellPrice} złota?`)) sell(item.id);
+                      }}
+                      className="rounded border border-line px-3 py-1.5 text-xs text-foreground disabled:opacity-40"
+                    >
+                      Sprzedaj za {item.sellPrice}
+                    </button>
+                  </div>
                 </div>
               );
             })}
