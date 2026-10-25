@@ -23,6 +23,9 @@ export const PVP_INACTIVE_DAYS = 7;
 /** GDD nie podaje wprost ile PD daje wygrana – własna decyzja (do przeglądu): 5% pełnego poziomu, jak drobne zlecenie. */
 export const PVP_WIN_XP_PERCENT = 0.05;
 
+/** Pojedynek robi wiele kolejnych zapytań (fama, złoto, PD, raport, zadania bóstw) – nad zwykły 5 s budżet Prisma przy realnych opóźnieniach do Neon (patrz settleExpedition w expeditions.ts). */
+const TRANSACTION_OPTIONS: { timeout: number } = { timeout: 15_000 };
+
 async function loadHeroConfig(tx: Prisma.TransactionClient, characterId: string, tactic?: Tactic) {
   const character = await tx.character.findUniqueOrThrow({ where: { id: characterId } });
   const items = await tx.item.findMany({ where: { characterId, location: "EQUIPPED" } });
@@ -227,5 +230,5 @@ export async function attackPlayer(attackerId: string, defenderId: string, tacti
     ];
 
     return { ok: true, result: outcome.result, report: fullReport, fameDeltaSelf, goldGained, experienceGained };
-  });
+  }, TRANSACTION_OPTIONS);
 }

@@ -25,6 +25,14 @@ import type { Prisma } from "@/generated/prisma/client";
 
 export const SERVER = "Valmor";
 
+/**
+ * Rozliczenie wyprawy robi wiele kolejnych zapytań w jednej transakcji
+ * (zadania lokacji, łowy, zadania dzienne, zadania bóstw, raporty walk,
+ * łupy) – nad zwykły 5 s budżet Prisma przy realnych opóźnieniach sieci do
+ * Neon (potwierdzone w logach produkcji: P2028 "expired transaction").
+ */
+const TRANSACTION_OPTIONS: { timeout: number } = { timeout: 15_000 };
+
 async function loadEquippedItems(
   tx: Prisma.TransactionClient,
   characterId: string,
@@ -484,7 +492,7 @@ async function settleExpedition(expeditionId: string): Promise<ReportLine[][]> {
     }
 
     return allLines;
-  });
+  }, TRANSACTION_OPTIONS);
 }
 
 export { MAX_STAMINA };
