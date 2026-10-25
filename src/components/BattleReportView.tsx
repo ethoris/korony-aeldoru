@@ -4,7 +4,7 @@ export interface ReportLineView {
   text: string;
   element?: string;
   crit?: boolean;
-  variant?: "victory" | "defeat" | "draw" | "retreat" | "heal";
+  variant?: "victory" | "defeat" | "draw" | "retreat" | "heal" | "loot";
 }
 
 const ELEMENT_COLOR: Record<string, string> = {
@@ -23,6 +23,7 @@ const VARIANT_CLASS: Record<string, string> = {
   draw: "font-bold text-muted",
   retreat: "font-bold text-muted",
   heal: "text-success",
+  loot: "font-semibold text-accent",
 };
 
 // Dopasowuje sformatowaną frazę obrażeń z formatDamage() (src/game/combat/report.ts):

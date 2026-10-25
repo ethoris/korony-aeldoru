@@ -335,6 +335,7 @@ async function settleExpedition(expeditionId: string): Promise<ReportLine[][]> {
         hero: heroConfigForReport,
         experience: fight.xpGained,
         gold: Math.max(0, fight.goldDelta),
+        lootItemName: fight.lootItem?.name,
       },
       fight.seedUsed,
     );

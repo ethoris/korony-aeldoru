@@ -26,8 +26,20 @@ export default async function GameLayout({ children }: { children: React.ReactNo
   const existing = await getCharacterForUser(session.user.id);
   if (!existing) return <>{children}</>;
 
-  const { character } = await syncCharacter(existing.id);
+  const { character, settlementReportLines } = await syncCharacter(existing.id);
   const isStaff = session.user.role === "ADMIN" || session.user.role === "MODERATOR";
+
+  // Powiadomienia widoczne niezależnie od strony, gdy wyprawa rozlicza się w tle
+  // (np. podczas przejścia na inną podstronę) – bez tego drop/zadanie ukończone
+  // widać tylko na stronie /wyprawy, jeśli akurat tam jest gracz w tym momencie.
+  const notifications = (settlementReportLines ?? [])
+    .flat()
+    .filter(
+      (line) =>
+        line.variant === "loot" ||
+        /^(Zadanie ukończone:|Zadanie bóstwa ukończone:|Łowy ukończone!|Zadania dzienne:|Seria \d+ dni)/.test(line.text),
+    )
+    .map((line) => line.text);
 
   return (
     <AppShell
@@ -40,6 +52,7 @@ export default async function GameLayout({ children }: { children: React.ReactNo
         staminaUpdatedAt: character.staminaUpdatedAt.toISOString(),
       }}
       isStaff={isStaff}
+      notifications={notifications}
     >
       {children}
     </AppShell>

@@ -74,7 +74,7 @@ export function fillTemplate(template: string, vars: LineVars): string {
  * liczby obrażeń pogrubione w kolorze żywiołu, krytyki z ikoną) – dodane
  * obok tekstu, nie zmieniają samej treści linii.
  */
-export type ReportLineVariant = "victory" | "defeat" | "draw" | "retreat" | "heal";
+export type ReportLineVariant = "victory" | "defeat" | "draw" | "retreat" | "heal" | "loot";
 
 export interface ReportLine {
   text: string;

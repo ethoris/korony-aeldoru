@@ -48,21 +48,35 @@ export default async function QuestsPage() {
         <div className="rounded-lg border border-line bg-card p-5">
           <h2 className="font-display text-base font-bold text-foreground">Zadania dzienne (reset 6:00)</h2>
           <div className="mt-3 flex flex-col gap-3">
-            {dailySlots.map((slot) => {
-              const state = progressByKey.get(slot.key);
-              const isDone = state?.state === "COMPLETED";
-              const counter = Math.min(state?.counter ?? 0, slot.target);
-              return (
-                <div key={slot.key} className="text-sm">
-                  <p className={isDone ? "text-success" : "text-foreground"}>
-                    ⭐ {slot.label}
-                    {isDone && " — Ukończone"}
-                  </p>
-                  {!isDone && <p className="text-xs text-muted">({counter}/{slot.target})</p>}
-                </div>
-              );
-            })}
+            {dailySlots
+              .filter((slot) => progressByKey.get(slot.key)?.state !== "COMPLETED")
+              .map((slot) => {
+                const state = progressByKey.get(slot.key);
+                const counter = Math.min(state?.counter ?? 0, slot.target);
+                return (
+                  <div key={slot.key} className="text-sm">
+                    <p className="text-foreground">⭐ {slot.label}</p>
+                    <p className="text-xs text-muted">({counter}/{slot.target})</p>
+                  </div>
+                );
+              })}
           </div>
+          {(() => {
+            const done = dailySlots.filter((slot) => progressByKey.get(slot.key)?.state === "COMPLETED");
+            if (done.length === 0) return null;
+            return (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs text-muted">Ukończone dziś ({done.length})</summary>
+                <div className="mt-2 flex flex-col gap-1">
+                  {done.map((slot) => (
+                    <p key={slot.key} className="text-sm text-success">
+                      ⭐ {slot.label} — Ukończone
+                    </p>
+                  ))}
+                </div>
+              </details>
+            );
+          })()}
         </div>
 
         {LOCATIONS.map((location) => {
@@ -70,47 +84,73 @@ export default async function QuestsPage() {
           const hunts = huntSlotsForLocation(location.key, now);
           if (quests.length === 0) return null;
 
+          const questIsDone = (quest: (typeof quests)[number]) => {
+            const state = progressByKey.get(quest.key);
+            return state ? state.state !== "ACTIVE" : false;
+          };
+          const huntIsDone = (hunt: (typeof hunts)[number]) => progressByKey.get(hunt.key)?.state === "COMPLETED";
+
+          const activeQuests = quests.filter((q) => !questIsDone(q));
+          const doneQuests = quests.filter((q) => questIsDone(q));
+          const activeHunts = hunts.filter((h) => !huntIsDone(h));
+          const doneHunts = hunts.filter((h) => huntIsDone(h));
+
+          const renderQuest = (quest: (typeof quests)[number]) => {
+            const state = progressByKey.get(quest.key);
+            const isDone = questIsDone(quest);
+            const counter = state?.counter ?? 0;
+            return (
+              <div key={quest.key} className="text-sm">
+                <p className={isDone ? "text-success" : "text-foreground"}>
+                  {quest.kind === "STORY" ? "📖 " : "📜 "}
+                  {quest.title}
+                  {isDone && ` — ${STATE_LABEL[state!.state]}`}
+                </p>
+                <p className="text-xs text-muted">{quest.summary}</p>
+                <p className="text-xs text-muted">
+                  Cel: {CONDITION_LABEL[quest.condition.type](quest.condition.target)}
+                  {quest.condition.type === "WIN_COUNT" && !isDone && ` (${counter}/${quest.condition.target})`}
+                </p>
+              </div>
+            );
+          };
+
+          const renderHunt = (hunt: (typeof hunts)[number], i: number) => {
+            const state = progressByKey.get(hunt.key);
+            const isDone = huntIsDone(hunt);
+            const counter = state?.counter ?? 0;
+            return (
+              <div key={hunt.key} className="text-sm">
+                <p className={isDone ? "text-success" : "text-foreground"}>
+                  🏹 Łowy {i + 1}/3{isDone && " — Ukończone"}
+                </p>
+                <p className="text-xs text-muted">
+                  Cel: {hunt.target} wygranych w tej lokacji{!isDone && ` (${Math.min(counter, hunt.target)}/${hunt.target})`}
+                </p>
+              </div>
+            );
+          };
+
           return (
             <div key={location.key} className="rounded-lg border border-line bg-card p-5">
               <h2 className="font-display text-base font-bold text-foreground">{location.name}</h2>
 
               <div className="mt-3 flex flex-col gap-3">
-                {quests.map((quest) => {
-                  const state = progressByKey.get(quest.key);
-                  const isDone = state ? state.state !== "ACTIVE" : false;
-                  const counter = state?.counter ?? 0;
-                  return (
-                    <div key={quest.key} className="text-sm">
-                      <p className={isDone ? "text-success" : "text-foreground"}>
-                        {quest.kind === "STORY" ? "📖 " : "📜 "}
-                        {quest.title}
-                        {isDone && ` — ${STATE_LABEL[state!.state]}`}
-                      </p>
-                      <p className="text-xs text-muted">{quest.summary}</p>
-                      <p className="text-xs text-muted">
-                        Cel: {CONDITION_LABEL[quest.condition.type](quest.condition.target)}
-                        {quest.condition.type === "WIN_COUNT" && !isDone && ` (${counter}/${quest.condition.target})`}
-                      </p>
-                    </div>
-                  );
-                })}
-
-                {hunts.map((hunt, i) => {
-                  const state = progressByKey.get(hunt.key);
-                  const isDone = state?.state === "COMPLETED";
-                  const counter = state?.counter ?? 0;
-                  return (
-                    <div key={hunt.key} className="text-sm">
-                      <p className={isDone ? "text-success" : "text-foreground"}>
-                        🏹 Łowy {i + 1}/3{isDone && " — Ukończone"}
-                      </p>
-                      <p className="text-xs text-muted">
-                        Cel: {hunt.target} wygranych w tej lokacji{!isDone && ` (${Math.min(counter, hunt.target)}/${hunt.target})`}
-                      </p>
-                    </div>
-                  );
-                })}
+                {activeQuests.map(renderQuest)}
+                {activeHunts.map((h) => renderHunt(h, hunts.indexOf(h)))}
               </div>
+
+              {(doneQuests.length > 0 || doneHunts.length > 0) && (
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-xs text-muted">
+                    Ukończone ({doneQuests.length + doneHunts.length})
+                  </summary>
+                  <div className="mt-2 flex flex-col gap-3">
+                    {doneQuests.map(renderQuest)}
+                    {doneHunts.map((h) => renderHunt(h, hunts.indexOf(h)))}
+                  </div>
+                </details>
+              )}
             </div>
           );
         })}

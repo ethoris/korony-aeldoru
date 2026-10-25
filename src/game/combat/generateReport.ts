@@ -12,6 +12,8 @@ export interface ReportContext {
   hero: HeroConfig;
   experience: number;
   gold: number;
+  /** Nazwa przedmiotu, jeśli walka dała łup (docs/gdd/03-teksty-raportow.md: linia {LUP}). */
+  lootItemName?: string;
 }
 
 function declineNumberWord(amount: number, forms: [string, string, string]): string {
@@ -104,6 +106,9 @@ export function generateReport(outcome: BattleOutcome, ctx: ReportContext, seed:
         { A, C, PD: formatExperience(ctx.experience), ZLOTO: formatGold(ctx.gold) },
         { variant: "victory" },
       );
+      if (ctx.lootItemName) {
+        builder.push(GENERAL_LINES.loot, { A, LUP: ctx.lootItemName }, { variant: "loot" });
+      }
       break;
     case "LOSE":
       builder.push(GENERAL_LINES.defeat, { A, C }, { variant: "defeat" });

@@ -112,9 +112,33 @@ function NavButton({ href, label, icon, active }: { href: string; label: string;
   );
 }
 
+const NOTIFICATION_MS = 7000;
+
+/** Powiadomienia o dropie/zadaniach rozliczonych w tle (docs/gdd/03-teksty-raportow.md). Jedno pokazanie na zestaw z serwera. */
+function useNotifications(notifications: string[]) {
+  const [visible, setVisible] = useState<{ id: number; text: string }[]>([]);
+
+  useEffect(() => {
+    // Nowa referencja propsa = świeże dane z serwera (nowe żądanie, docs patrz layout.tsx) –
+    // pokaż raz. Synchroniczny setState tu jest zamierzony (jak w ThemeToggle.tsx) i nie kaskaduje:
+    // odpala się tylko gdy `notifications` faktycznie się zmienia.
+    if (notifications.length === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVisible((prev) => [...prev, ...notifications.map((text) => ({ id: Math.random(), text }))]);
+    const timer = setTimeout(() => {
+      setVisible((prev) => prev.filter((v) => !notifications.includes(v.text)));
+    }, NOTIFICATION_MS);
+    return () => clearTimeout(timer);
+  }, [notifications]);
+
+  const dismiss = (id: number) => setVisible((prev) => prev.filter((v) => v.id !== id));
+  return { visible, dismiss };
+}
+
 export function AppShell({
   character,
   isStaff,
+  notifications = [],
   children,
 }: {
   character: {
@@ -126,10 +150,12 @@ export function AppShell({
     staminaUpdatedAt: string;
   };
   isStaff: boolean;
+  notifications?: string[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const { visible: visibleNotifications, dismiss: dismissNotification } = useNotifications(notifications);
   const groups = buildGroups(isStaff);
   const { current: staminaNow, label: staminaLabel } = useStaminaCountdown(
     character.stamina,
@@ -144,6 +170,28 @@ export function AppShell({
 
   return (
     <div className="flex min-h-full flex-1 flex-col md:flex-row">
+      {/* Powiadomienia (łup, zadanie ukończone) rozliczone w tle na innej podstronie. */}
+      {visibleNotifications.length > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 top-2 z-40 flex flex-col items-center gap-2 px-4">
+          {visibleNotifications.map((n) => (
+            <div
+              key={n.id}
+              className="pointer-events-auto flex max-w-md items-start gap-2 rounded-lg border border-line bg-card px-4 py-2 text-sm text-foreground shadow-lg"
+            >
+              <span className="flex-1">{n.text}</span>
+              <button
+                type="button"
+                onClick={() => dismissNotification(n.id)}
+                className="shrink-0 text-muted hover:text-foreground"
+                aria-label="Zamknij"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Boczny panel bohatera (komputer), docs/gdd/14-wyglad.md */}
       <aside className="hidden w-56 shrink-0 flex-col gap-4 border-r border-line bg-card p-4 md:flex">
         <div>
