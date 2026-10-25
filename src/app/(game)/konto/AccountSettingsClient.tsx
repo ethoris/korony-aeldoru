@@ -4,6 +4,8 @@ import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { ThemeToggle } from "@/components/ThemeToggle";
+
 export function AccountSettingsClient({ email }: { email: string }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -76,6 +78,16 @@ export function AccountSettingsClient({ email }: { email: string }) {
         <p className="mt-1 text-sm text-muted">
           Zalogowano jako <span className="text-foreground">{email}</span>
         </p>
+      </div>
+
+      <div className="rounded-lg border border-line bg-card p-6">
+        <h2 className="font-display text-lg font-bold uppercase tracking-wide text-foreground">
+          Wygląd
+        </h2>
+        <p className="mt-1 text-sm text-muted">Motyw ciemny lub pergamin (docs/gdd/14-wyglad.md).</p>
+        <div className="mt-3 max-w-xs">
+          <ThemeToggle />
+        </div>
       </div>
 
       <div className="rounded-lg border border-line bg-card p-6">

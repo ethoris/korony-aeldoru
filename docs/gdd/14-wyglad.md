@@ -45,8 +45,8 @@ Kolor nigdy nie jest jedyną informacją: obok zawsze stoi słowo (Rzadki, Zesta
 
 ## Interfejs
 
-- **Telefon najpierw:** jedna kolumna, dolne menu z 5 pozycjami (Bohater, Wyprawy, Twierdza, Miasto, Więcej), przyciski min. 44 px wysokości. Na komputerze ta sama kolumna, wyśrodkowana do 720 px, plus boczny panel bohatera.
-- **Górny pasek:** imię i poziom, trzy cienkie paski: PŻ (czerwony), PD (złoty), wytrwałość (niebieski) z czasem do pełnej.
+- **Telefon najpierw:** jedna kolumna, dolne menu z 5 pozycjami (Bohater, Wyprawy, Twierdza, Miasto, Więcej), przyciski min. 44 px wysokości. Na komputerze ta sama kolumna, wyśrodkowana do 720 px, plus boczny panel bohatera. Wdrożone w `src/components/AppShell.tsx` (layout `src/app/(game)/layout.tsx`); Miasto = Targowisko/Sklep/Czat/Gildia, Więcej = PvP/Napady/Mapa/Bóstwo/Ranking/Zadania/Ekwipunek/Konto (+Panel admina dla ADMIN/MODERATOR).
+- **Górny pasek:** imię i poziom, trzy cienkie paski: PŻ (czerwony), PD (złoty), wytrwałość (niebieski) z czasem do pełnej. **Odstępstwo (do przeglądu z Patrykiem):** PŻ nie ma jak pokazać poza walką – silnik walki jest bezstanowy między wyprawami (`docs/gdd/02-systemy-walki.md`), postać nie ma trwałego pola "aktualne PŻ" w bazie. Pasek pokazuje więc tylko PD i wytrwałość; PŻ zostaje w raporcie walki jak dawniej. Jeśli to ma się zmienić, potrzebny byłby nowy, trwały stan PŻ postaci (i decyzja, kiedy się regeneruje poza walką).
 - **Karty:** każda lokacja, przedmiot i zadanie to karta z ramką #3D342B i zaokrągleniem 8 px; rzadkość widać po kolorze nazwy i lewej krawędzi karty.
 - **Raport walki:** jak strona kroniki: inicjał rozdziału (Cinzel), tekst w Crimson Pro, liczby obrażeń pogrubione w kolorze żywiołu, krytyki z ikoną. Na końcu karta łupów i przycisk „Dalej”.
 - **Liczniki czasu:** duża cyfra w Inter („12:40”) i pasek postępu; po zakończeniu powiadomienie przeglądarki (jeśli gracz włączył).

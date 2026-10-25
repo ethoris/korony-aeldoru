@@ -179,42 +179,6 @@ export function CharacterStatsPanel({ character }: { character: CharacterData })
           <Link href="/inventory" className="rounded border border-line px-4 py-2 text-sm text-foreground">
             Ekwipunek
           </Link>
-          <Link href="/sklep" className="rounded border border-line px-4 py-2 text-sm text-foreground">
-            Sklep
-          </Link>
-          <Link href="/twierdza" className="rounded border border-line px-4 py-2 text-sm text-foreground">
-            Twierdza
-          </Link>
-          <Link href="/pvp" className="rounded border border-line px-4 py-2 text-sm text-foreground">
-            PvP
-          </Link>
-          <Link href="/napady" className="rounded border border-line px-4 py-2 text-sm text-foreground">
-            Napady
-          </Link>
-          <Link href="/gildia" className="rounded border border-line px-4 py-2 text-sm text-foreground">
-            Gildia
-          </Link>
-          <Link href="/targowisko" className="rounded border border-line px-4 py-2 text-sm text-foreground">
-            Targowisko
-          </Link>
-          <Link href="/czat" className="rounded border border-line px-4 py-2 text-sm text-foreground">
-            Czat
-          </Link>
-          <Link href="/mapa" className="rounded border border-line px-4 py-2 text-sm text-foreground">
-            Mapa
-          </Link>
-          <Link href="/bostwo" className="rounded border border-line px-4 py-2 text-sm text-foreground">
-            Bóstwo
-          </Link>
-          <Link href="/ranking" className="rounded border border-line px-4 py-2 text-sm text-foreground">
-            Ranking
-          </Link>
-          <Link href="/quests" className="rounded border border-line px-4 py-2 text-sm text-foreground">
-            Zadania
-          </Link>
-          <Link href="/konto" className="rounded border border-line px-4 py-2 text-sm text-foreground">
-            Konto
-          </Link>
         </div>
       </div>
 
