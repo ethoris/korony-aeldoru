@@ -12,6 +12,7 @@ import { NEW_PLAYER_PROTECTION_DAYS, isNewPlayerProtected, protectionEndsAt } fr
 import { fameDelta } from "@/game/pvp/fame";
 
 import { checkDeityQuests, recordPvpWinSignal } from "./deityQuests";
+import { logServerError } from "./monitoring";
 import { prisma } from "./prisma";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -104,7 +105,15 @@ export type AttackPlayerResult =
 export async function attackPlayer(attackerId: string, defenderId: string, tactic: Tactic = "BALANCED"): Promise<AttackPlayerResult> {
   if (attackerId === defenderId) return { error: "Nie możesz zaatakować samego siebie." };
 
-  return prisma.$transaction(async (tx) => {
+  try {
+    return await runAttackTransaction();
+  } catch (error) {
+    await logServerError("attackPlayer", error, { attackerId, defenderId });
+    throw error;
+  }
+
+  function runAttackTransaction(): Promise<AttackPlayerResult> {
+    return prisma.$transaction(async (tx) => {
     const attackerChar = await tx.character.findUniqueOrThrow({ where: { id: attackerId } });
     const defenderChar = await tx.character.findUniqueOrThrow({ where: { id: defenderId } });
 
@@ -229,6 +238,7 @@ export async function attackPlayer(attackerId: string, defenderId: string, tacti
       ...deityCompletions.map((c) => ({ text: `Zadanie bóstwa ukończone: ${c.title} Zdobywasz łaskę.` })),
     ];
 
-    return { ok: true, result: outcome.result, report: fullReport, fameDeltaSelf, goldGained, experienceGained };
-  }, TRANSACTION_OPTIONS);
+      return { ok: true, result: outcome.result, report: fullReport, fameDeltaSelf, goldGained, experienceGained };
+    }, TRANSACTION_OPTIONS);
+  }
 }

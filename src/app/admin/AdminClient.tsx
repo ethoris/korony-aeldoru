@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface SearchResult {
   characterId: string;
@@ -43,20 +43,59 @@ interface AdminAction {
   createdAt: string;
 }
 
+interface MonitoringSnapshot {
+  dbLatencyMs: number;
+  dbOk: boolean;
+  userCount: number;
+  characterCount: number;
+  activeCharactersLast24h: number;
+  activeExpeditionsNow: number;
+  recentErrors: { context: string; message: string; code: string | null; createdAt: string }[];
+  errorCountLastHour: number;
+}
+
+const MONITORING_REFRESH_MS = 20_000;
+
 export function AdminClient({
   isFullAdmin,
   maintenance,
   actions,
+  monitoring: initialMonitoring,
 }: {
   isFullAdmin: boolean;
   maintenance: { enabled: boolean; message: string | null };
   actions: AdminAction[];
+  monitoring: MonitoringSnapshot;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [monitoring, setMonitoring] = useState(initialMonitoring);
+  const [monitoringUpdatedAt, setMonitoringUpdatedAt] = useState<Date | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function refresh() {
+      try {
+        const response = await fetch("/api/admin/monitoring");
+        if (!response.ok || cancelled) return;
+        const data = (await response.json()) as MonitoringSnapshot;
+        if (!cancelled) {
+          setMonitoring(data);
+          setMonitoringUpdatedAt(new Date());
+        }
+      } catch {
+        // Cichy błąd odświeżania – stare dane zostają widoczne, panel nie ma się czym wywrócić.
+      }
+    }
+    const id = setInterval(refresh, MONITORING_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
 
   const [editReason, setEditReason] = useState("");
   const [editFields, setEditFields] = useState<Record<string, string>>({});
@@ -154,6 +193,64 @@ export function AdminClient({
       <div className="rounded-lg border border-line bg-card p-6">
         <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-accent">Panel {isFullAdmin ? "admina" : "moderatora"}</h1>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+      </div>
+
+      <div className="rounded-lg border border-line bg-card p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-base font-bold text-foreground">Monitoring</h2>
+          <span className="text-[11px] text-muted">
+            {monitoringUpdatedAt
+              ? `odświeżone ${monitoringUpdatedAt.toLocaleTimeString("pl-PL")}`
+              : `co ${MONITORING_REFRESH_MS / 1000}s`}
+          </span>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+          <div className="rounded border border-line px-3 py-2">
+            <p className="text-xs text-muted">Baza danych</p>
+            <p className={monitoring.dbOk ? "text-success" : "text-danger"}>
+              {monitoring.dbOk ? `OK · ${monitoring.dbLatencyMs}ms` : "NIEDOSTĘPNA"}
+            </p>
+          </div>
+          <div className="rounded border border-line px-3 py-2">
+            <p className="text-xs text-muted">Konta / postacie</p>
+            <p className="text-foreground">
+              {monitoring.userCount} / {monitoring.characterCount}
+            </p>
+          </div>
+          <div className="rounded border border-line px-3 py-2">
+            <p className="text-xs text-muted">Aktywni (24h)</p>
+            <p className="text-foreground">{monitoring.activeCharactersLast24h}</p>
+          </div>
+          <div className="rounded border border-line px-3 py-2">
+            <p className="text-xs text-muted">Wyprawy w toku</p>
+            <p className="text-foreground">{monitoring.activeExpeditionsNow}</p>
+          </div>
+          <div className="rounded border border-line px-3 py-2">
+            <p className="text-xs text-muted">Błędy (ostatnia godzina)</p>
+            <p className={monitoring.errorCountLastHour > 0 ? "text-danger" : "text-success"}>
+              {monitoring.errorCountLastHour}
+            </p>
+          </div>
+        </div>
+
+        {monitoring.recentErrors.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-foreground">Ostatnie błędy serwera:</p>
+            <div className="mt-1 flex flex-col gap-1">
+              {monitoring.recentErrors.map((e, i) => (
+                <p key={i} className="text-xs text-muted">
+                  {new Date(e.createdAt).toLocaleString("pl-PL")} — <span className="text-danger">{e.context}</span>
+                  {e.code ? ` (${e.code})` : ""}: {e.message}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-line bg-card p-6">
+        <h2 className="font-display text-base font-bold text-foreground">Szukaj gracza</h2>
         <div className="mt-3 flex gap-2">
           <input
             value={query}

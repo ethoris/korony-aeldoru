@@ -18,6 +18,7 @@ import type { ItemAffixInstance } from "@/game/items/types";
 import { progressDailyQuests } from "@/lib/dailyQuests";
 import { checkDeityQuests, recordExpeditionDeitySignals } from "@/lib/deityQuests";
 import { progressLocationHunts } from "@/lib/hunts";
+import { logServerError } from "@/lib/monitoring";
 import { isLocationUnlocked, progressLocationQuests } from "@/lib/quests";
 
 import { prisma } from "./prisma";
@@ -326,8 +327,16 @@ async function settleExpedition(expeditionId: string): Promise<ReportLine[][]> {
     return { fight, lines };
   });
 
-  return prisma.$transaction(async (tx) => {
-    const fresh = await tx.expedition.findUniqueOrThrow({ where: { id: expeditionId } });
+  try {
+    return await settleExpeditionTransaction();
+  } catch (error) {
+    await logServerError("settleExpedition", error, { expeditionId, characterId: character.id });
+    throw error;
+  }
+
+  function settleExpeditionTransaction(): Promise<ReportLine[][]> {
+    return prisma.$transaction(async (tx) => {
+      const fresh = await tx.expedition.findUniqueOrThrow({ where: { id: expeditionId } });
     if (fresh.settled) return [];
 
     // Cztery niezależne od siebie funkcje (żadna nie czyta wyniku innej) – odpalone razem
@@ -549,8 +558,9 @@ async function settleExpedition(expeditionId: string): Promise<ReportLine[][]> {
       allLines.push(deityCompletions.map((c) => ({ text: `Zadanie bóstwa ukończone: ${c.title} Zdobywasz łaskę.` })));
     }
 
-    return allLines;
-  }, TRANSACTION_OPTIONS);
+      return allLines;
+    }, TRANSACTION_OPTIONS);
+  }
 }
 
 export { MAX_STAMINA };
