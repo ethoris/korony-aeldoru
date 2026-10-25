@@ -43,7 +43,11 @@ export const SERVER = "Valmor";
  *    środku) i checkDeityQuests czyta/zapisuje zbiorczo zamiast w pętli
  *    (src/lib/deityQuests.ts) – realne skrócenie liczby zapytań.
  */
-const TRANSACTION_OPTIONS: { timeout: number } = { timeout: 20_000 };
+// maxWait (domyślnie w Prisma tylko 2000ms!) to OSOBNY limit od `timeout` – ile Prisma
+// czeka na start transakcji (slot/połączenie), zanim w ogóle zacznie. Bez jawnego ustawienia
+// zostawał na 2s, więc przy chwilowym obciążeniu puli leciało "Unable to start a transaction
+// in the given time" mimo że connectionTimeoutMillis w prisma.ts daje na to 10s.
+const TRANSACTION_OPTIONS: { timeout: number; maxWait: number } = { timeout: 20_000, maxWait: 10_000 };
 
 async function loadEquippedItems(
   tx: Prisma.TransactionClient,

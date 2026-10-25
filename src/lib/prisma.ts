@@ -22,7 +22,17 @@ function createPrismaClient() {
     connectionString: process.env.DATABASE_URL!,
     connectionTimeoutMillis: 10_000,
   });
-  return new PrismaClient({ adapter });
+  return new PrismaClient({
+    adapter,
+    // Domyślny maxWait dla $transaction w Prisma to tylko 2000ms – osobny limit od
+    // connectionTimeoutMillis powyżej, ile Prisma czeka na START transakcji (slot),
+    // zanim w ogóle zacznie. Przy chwilowym obciążeniu puli dawało to "Unable to
+    // start a transaction in the given time" na KAŻDEJ transakcji w kodzie (nie
+    // tylko settleExpedition/attackPlayer, które mają własne, jeszcze wyższe wartości),
+    // mimo że pula dawała na połączenie 10s. Ustawione globalnie, żeby nie trzeba
+    // było pamiętać o tym w każdym nowym $transaction w kodzie.
+    transactionOptions: { maxWait: 10_000, timeout: 10_000 },
+  });
 }
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
