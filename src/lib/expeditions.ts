@@ -26,20 +26,21 @@ import type { Prisma } from "@/generated/prisma/client";
 export const SERVER = "Valmor";
 
 /**
- * UWAGA: podnoszenie tego limitu z 5000ms na 15000ms (wersja poprzednia tego
- * komentarza) spowodowało w produkcji coś gorszego niż P2028 – requesty na
- * /expeditions, /inventory, /napady zawieszały się na 300s (twardy limit
- * Vercela), zamiast szybko zawieść. To wygląda na wyczerpanie/zatrucie puli
- * połączeń do Neon (pojedynczy klient Prisma w src/lib/prisma.ts żyje przez
- * cały czas trwania "ciepłego" kontenera serverless) – dłużej trzymana
- * transakcja = dłużej zajęte połączenie = większa szansa na zator innych
- * żądań. Cofnięte do wartości bliskiej domyślnej: krótka, szybka porażka
- * (P2028, da się przeładować stronę) jest bezpieczniejsza niż 5-minutowe
- * zawieszenie całej gry. Do przeglądu: prawdziwa przyczyna leży raczej w
- * architekturze połączenia (adapter WebSocket + singleton klienta), nie w
- * samej liczbie milisekund.
+ * Historia tej stałej (do przeglądu, ale rozwiązane):
+ * 1) 5000ms (domyślne) → P2028 pod obciążeniem.
+ * 2) Podniesione do 15000ms → requesty zaczęły wisieć do 300s (twardy limit
+ *    Vercela) zamiast szybko zawieść – prawdziwa przyczyna NIE była w tej
+ *    liczbie, tylko w puli połączeń Prisma/Neon (src/lib/prisma.ts) bez
+ *    connectionTimeoutMillis: żądanie o połączenie z wyczerpanej puli
+ *    czekało bez żadnego limitu czasu.
+ * 3) connectionTimeoutMillis: 10000 dodane w src/lib/prisma.ts – pula już
+ *    nie wisi w nieskończoność, więc wysoki timeout transakcji jest znowu
+ *    bezpieczny. Dodatkowo settleExpedition wynosi symulację walki i
+ *    budowę raportów poza transakcję (tylko zapisy do bazy zostają w
+ *    środku) i checkDeityQuests czyta/zapisuje zbiorczo zamiast w pętli
+ *    (src/lib/deityQuests.ts) – realne skrócenie liczby zapytań.
  */
-const TRANSACTION_OPTIONS: { timeout: number } = { timeout: 8_000 };
+const TRANSACTION_OPTIONS: { timeout: number } = { timeout: 20_000 };
 
 async function loadEquippedItems(
   tx: Prisma.TransactionClient,

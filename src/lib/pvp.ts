@@ -23,8 +23,8 @@ export const PVP_INACTIVE_DAYS = 7;
 /** GDD nie podaje wprost ile PD daje wygrana – własna decyzja (do przeglądu): 5% pełnego poziomu, jak drobne zlecenie. */
 export const PVP_WIN_XP_PERCENT = 0.05;
 
-/** Patrz komentarz przy TRANSACTION_OPTIONS w expeditions.ts – 15s okazało się gorsze (300s zawieszenia), cofnięte do bliżej domyślnej wartości. */
-const TRANSACTION_OPTIONS: { timeout: number } = { timeout: 8_000 };
+/** Patrz historia TRANSACTION_OPTIONS w expeditions.ts – connectionTimeoutMillis w prisma.ts usunęło ryzyko zawieszenia, więc wyższy timeout jest znowu bezpieczny. */
+const TRANSACTION_OPTIONS: { timeout: number } = { timeout: 20_000 };
 
 async function loadHeroConfig(tx: Prisma.TransactionClient, characterId: string, tactic?: Tactic) {
   const character = await tx.character.findUniqueOrThrow({ where: { id: characterId } });
