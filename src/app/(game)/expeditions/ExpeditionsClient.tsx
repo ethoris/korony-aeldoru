@@ -99,6 +99,10 @@ export function ExpeditionsClient({
   const [spellElement, setSpellElement] = useState<(typeof SPELL_ELEMENTS)[number]["key"]>("fire");
   const [selectedAbilities, setSelectedAbilities] = useState<string[]>([]);
   const [selectedPotions, setSelectedPotions] = useState<string[]>([]);
+  // Mikstura mogła zniknąć z ekwipunku (zużyta, zepsute żądanie itd.) po tym, jak gracz ją
+  // zaznaczył – bez tego zostawał niewidoczny, niemożliwy do odznaczenia wybór i serwer
+  // odrzucał start wyprawy ("Nie masz mikstury: X") bez sposobu, by to naprawić bez przeładowania.
+  const validSelectedPotions = selectedPotions.filter((key) => ownedCombatPotions.some((p) => p.key === key));
 
   function toggleAbility(key: string) {
     setSelectedAbilities((prev) => {
@@ -150,7 +154,7 @@ export function ExpeditionsClient({
         tactic,
         abilities: selectedAbilities,
         spellElement: character.classKey === "MAGE" ? spellElement : undefined,
-        potions: selectedPotions,
+        potions: validSelectedPotions,
       }),
     });
     const data = await response.json().catch(() => ({}));
@@ -289,12 +293,12 @@ export function ExpeditionsClient({
             {ownedCombatPotions.length > 0 && (
               <>
                 <p className="mt-4 text-sm text-muted">
-                  Pas z miksturami (do {MAX_BELT_POTIONS}) — {selectedPotions.length}/{MAX_BELT_POTIONS}
+                  Pas z miksturami (do {MAX_BELT_POTIONS}) — {validSelectedPotions.length}/{MAX_BELT_POTIONS}
                 </p>
                 <div className="mt-2 flex flex-col gap-2">
                   {ownedCombatPotions.map((potion) => {
-                    const checked = selectedPotions.includes(potion.key);
-                    const disabled = !checked && selectedPotions.length >= MAX_BELT_POTIONS;
+                    const checked = validSelectedPotions.includes(potion.key);
+                    const disabled = !checked && validSelectedPotions.length >= MAX_BELT_POTIONS;
                     return (
                       <label
                         key={potion.key}
