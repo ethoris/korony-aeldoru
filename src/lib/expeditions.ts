@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { buildHeroConfigFromEquipment } from "@/game/character/combatLoadout";
 import type { EquippedItemSummary } from "@/game/character/combatLoadout";
 import { validateAbilitySelection } from "@/game/character/abilitySelection";
@@ -60,12 +62,19 @@ async function loadEquippedItems(
   }));
 }
 
-export async function getCharacterForUser(userId: string) {
+/**
+ * cache() = jedno wykonanie na żądanie (React request memoization). Layout gry
+ * i strona pod nim obie wołają tę funkcję z tym samym userId – bez cache()
+ * to osobne zapytanie do bazy przy KAŻDYM wejściu w podstronę, podwójnie
+ * (zob. historia błędów "timeout exceeded when trying to connect" na / , /character,
+ * /mapa, /bostwo, /inventory, /twierdza – wyczerpywanie puli połączeń Neon).
+ */
+export const getCharacterForUser = cache(async (userId: string) => {
   return prisma.character.findUnique({ where: { userId_server: { userId, server: SERVER } } });
-}
+});
 
-/** Odświeża wytrwałość i rozlicza zakończoną wyprawę, jeśli jedna czeka. */
-export async function syncCharacter(characterId: string) {
+/** Odświeża wytrwałość i rozlicza zakończoną wyprawę, jeśli jedna czeka. cache() – patrz getCharacterForUser. */
+export const syncCharacter = cache(async (characterId: string) => {
   let character = await prisma.character.findUniqueOrThrow({ where: { id: characterId } });
 
   const now = new Date();
@@ -74,20 +83,25 @@ export async function syncCharacter(characterId: string) {
     regen.stamina !== character.stamina || regen.staminaUpdatedAt.getTime() !== character.staminaUpdatedAt.getTime();
   // lastActiveAt tylko raz dziennie, żeby nie zapisywać do bazy przy każdym wejściu.
   const activeStale = now.getTime() - character.lastActiveAt.getTime() > 60 * 60 * 1000;
-  if (staminaChanged || activeStale) {
-    character = await prisma.character.update({
-      where: { id: characterId },
-      data: {
-        stamina: regen.stamina,
-        staminaUpdatedAt: regen.staminaUpdatedAt,
-        ...(activeStale ? { lastActiveAt: now } : {}),
-      },
-    });
-  }
 
-  const dueExpedition = await prisma.expedition.findFirst({
-    where: { characterId, settled: false, endAt: { lte: now } },
-  });
+  // Niezależne od siebie – zapis staminy/lastActiveAt i sprawdzenie zaległej wyprawy
+  // nie czytają wzajemnych wyników, więc idą równolegle (jedna sekwencja zamiast dwóch).
+  const [updated, dueExpedition] = await Promise.all([
+    staminaChanged || activeStale
+      ? prisma.character.update({
+          where: { id: characterId },
+          data: {
+            stamina: regen.stamina,
+            staminaUpdatedAt: regen.staminaUpdatedAt,
+            ...(activeStale ? { lastActiveAt: now } : {}),
+          },
+        })
+      : Promise.resolve(null),
+    prisma.expedition.findFirst({
+      where: { characterId, settled: false, endAt: { lte: now } },
+    }),
+  ]);
+  if (updated) character = updated;
 
   let settlementReportLines: ReportLine[][] | null = null;
   if (dueExpedition) {
@@ -96,7 +110,7 @@ export async function syncCharacter(characterId: string) {
   }
 
   return { character, settlementReportLines };
-}
+});
 
 export interface StartExpeditionError {
   error: string;
