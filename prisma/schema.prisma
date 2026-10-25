@@ -720,3 +720,13 @@ model GameEvent {
   @@index([type])
   @@map("game_events")
 }
+
+// Jeden wiersz (docs/gdd/13-technika.md: tryb przerwy technicznej panelu admina).
+model GameSettings {
+  id                  Int      @id @default(1)
+  maintenanceMode     Boolean  @default(false)
+  maintenanceMessage  String?
+  updatedAt           DateTime @updatedAt
+
+  @@map("game_settings")
+}
