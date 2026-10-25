@@ -14,13 +14,6 @@ const COUNTER_PREFIX = "counter:";
 const BOSS_LOSS_PREFIX = "bossloss:";
 const BOSS_COMEBACK_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
-async function counterValue(tx: Prisma.TransactionClient, characterId: string, key: string): Promise<number> {
-  const row = await tx.questProgress.findUnique({
-    where: { characterId_questKey: { characterId, questKey: `${COUNTER_PREFIX}${key}` } },
-  });
-  return row?.counter ?? 0;
-}
-
 async function incrementCounter(tx: Prisma.TransactionClient, characterId: string, key: string, amount: number): Promise<void> {
   if (amount === 0) return;
   const questKey = `${COUNTER_PREFIX}${key}`;
@@ -120,82 +113,131 @@ export async function recordInjuryHealedSignal(tx: Prisma.TransactionClient, cha
   await incrementCounter(tx, characterId, "injuryHealed", 1);
 }
 
-interface SnapshotContext {
-  characterId: string;
-  stats: { strength: number; dexterity: number; vitality: number; intellect: number };
+/** Które klucze "counter:*" (QuestProgress) potrzebuje dany warunek – do jednego zbiorczego odczytu zamiast N osobnych. */
+function neededCounterKeysFor(condition: DeityQuestCondition): string[] {
+  switch (condition.type) {
+    case "WIN_TYPE":
+      return condition.monsterTypes.map((t) => `winType:${t}`);
+    case "WIN_NO_POTION_TYPE":
+      return condition.monsterTypes.map((t) => `winNoPotionType:${t}`);
+    case "WIN_NO_POTION_ANY":
+      return ["winNoPotionAny"];
+    case "DEEP_WIN_NO_POTION":
+      return ["deepWinNoPotion"];
+    case "BOSS_DEFEAT_NO_POTION":
+      return ["bossWinNoPotion"];
+    case "SCOUT_WIN":
+      return ["scoutWin"];
+    case "LOSE_COUNT":
+      return ["loseTotal"];
+    case "NARROW_WIN":
+      return ["narrowWin"];
+    case "CRIT_COUNT":
+      return ["critTotal"];
+    case "CRIT_COUNT_BOSS":
+      return ["critBoss"];
+    case "DODGE_COUNT":
+      return ["dodgeTotal"];
+    case "BOSS_COMEBACK":
+      return ["bossComeback"];
+    case "PVP_WIN_TACTIC":
+      return [condition.tactic === "AGGRESSIVE" ? "pvpWinAggressive" : "pvpWinAny"];
+    case "UPGRADE_SUCCESS":
+      return ["upgradeSuccess"];
+    case "UNITS_TRAINED":
+      return ["unitsTrained"];
+    case "RAID_WIN":
+      return ["raidWin"];
+    case "RAID_LOOT":
+      return ["raidLoot"];
+    case "SIEGE_WIN":
+      return ["siegeWin"];
+    case "MARKET_SOLD_GOLD":
+      return ["marketSoldGold"];
+    case "EXPEDITION_GOLD":
+      return ["expeditionGold"];
+    case "INJURY_HEALED":
+      return ["injuryHealed"];
+    default:
+      // VAULT_GOLD_REACHED/UPGRADE_REACHED/ITEM_AFFIX_COUNT/ITEM_QUALITY_COUNT/STAT_REACHED/SET_COMPLETE nie używają liczników.
+      return [];
+  }
 }
 
-async function evaluateCondition(tx: Prisma.TransactionClient, ctx: SnapshotContext, condition: DeityQuestCondition): Promise<number> {
+interface EvalContext {
+  stats: { strength: number; dexterity: number; vitality: number; intellect: number };
+  counters: Map<string, number>;
+  fortressGoldVault: number;
+  items: { quality: string; upgrade: number; location: string; templateKey: string | null; traits: unknown }[];
+}
+
+function counterFromMap(counters: Map<string, number>, key: string): number {
+  return counters.get(key) ?? 0;
+}
+
+/**
+ * Jak dawne evaluateCondition, ale synchroniczne – działa na już wczytanych
+ * danych (liczniki/fortress/items), bez odczytu z bazy per warunek. checkDeityQuests
+ * wczytuje te dane raz, zbiorczo, dla wszystkich sprawdzanych zadań naraz.
+ */
+function evaluateConditionSync(condition: DeityQuestCondition, ctx: EvalContext): number {
   switch (condition.type) {
-    case "WIN_TYPE": {
-      let total = 0;
-      for (const type of condition.monsterTypes) total += await counterValue(tx, ctx.characterId, `winType:${type}`);
-      return total;
-    }
-    case "WIN_NO_POTION_TYPE": {
-      let total = 0;
-      for (const type of condition.monsterTypes) total += await counterValue(tx, ctx.characterId, `winNoPotionType:${type}`);
-      return total;
-    }
+    case "WIN_TYPE":
+      return condition.monsterTypes.reduce((sum, t) => sum + counterFromMap(ctx.counters, `winType:${t}`), 0);
+    case "WIN_NO_POTION_TYPE":
+      return condition.monsterTypes.reduce((sum, t) => sum + counterFromMap(ctx.counters, `winNoPotionType:${t}`), 0);
     case "WIN_NO_POTION_ANY":
-      return counterValue(tx, ctx.characterId, "winNoPotionAny");
+      return counterFromMap(ctx.counters, "winNoPotionAny");
     case "DEEP_WIN_NO_POTION":
-      return counterValue(tx, ctx.characterId, "deepWinNoPotion");
+      return counterFromMap(ctx.counters, "deepWinNoPotion");
     case "BOSS_DEFEAT_NO_POTION":
-      return counterValue(tx, ctx.characterId, "bossWinNoPotion");
+      return counterFromMap(ctx.counters, "bossWinNoPotion");
     case "SCOUT_WIN":
-      return counterValue(tx, ctx.characterId, "scoutWin");
+      return counterFromMap(ctx.counters, "scoutWin");
     case "LOSE_COUNT":
-      return counterValue(tx, ctx.characterId, "loseTotal");
+      return counterFromMap(ctx.counters, "loseTotal");
     case "NARROW_WIN":
-      return counterValue(tx, ctx.characterId, "narrowWin");
+      return counterFromMap(ctx.counters, "narrowWin");
     case "CRIT_COUNT":
-      return counterValue(tx, ctx.characterId, "critTotal");
+      return counterFromMap(ctx.counters, "critTotal");
     case "CRIT_COUNT_BOSS":
-      return counterValue(tx, ctx.characterId, "critBoss");
+      return counterFromMap(ctx.counters, "critBoss");
     case "DODGE_COUNT":
-      return counterValue(tx, ctx.characterId, "dodgeTotal");
+      return counterFromMap(ctx.counters, "dodgeTotal");
     case "BOSS_COMEBACK":
-      return counterValue(tx, ctx.characterId, "bossComeback");
+      return counterFromMap(ctx.counters, "bossComeback");
     case "PVP_WIN_TACTIC":
-      return counterValue(tx, ctx.characterId, condition.tactic === "AGGRESSIVE" ? "pvpWinAggressive" : "pvpWinAny");
+      return counterFromMap(ctx.counters, condition.tactic === "AGGRESSIVE" ? "pvpWinAggressive" : "pvpWinAny");
     case "UPGRADE_SUCCESS":
-      return counterValue(tx, ctx.characterId, "upgradeSuccess");
+      return counterFromMap(ctx.counters, "upgradeSuccess");
     case "UNITS_TRAINED":
-      return counterValue(tx, ctx.characterId, "unitsTrained");
+      return counterFromMap(ctx.counters, "unitsTrained");
     case "RAID_WIN":
-      return counterValue(tx, ctx.characterId, "raidWin");
+      return counterFromMap(ctx.counters, "raidWin");
     case "RAID_LOOT":
-      return counterValue(tx, ctx.characterId, "raidLoot");
+      return counterFromMap(ctx.counters, "raidLoot");
     case "SIEGE_WIN":
-      return counterValue(tx, ctx.characterId, "siegeWin");
+      return counterFromMap(ctx.counters, "siegeWin");
     case "MARKET_SOLD_GOLD":
-      return counterValue(tx, ctx.characterId, "marketSoldGold");
+      return counterFromMap(ctx.counters, "marketSoldGold");
     case "EXPEDITION_GOLD":
-      return counterValue(tx, ctx.characterId, "expeditionGold");
+      return counterFromMap(ctx.counters, "expeditionGold");
     case "INJURY_HEALED":
-      return counterValue(tx, ctx.characterId, "injuryHealed");
-    case "VAULT_GOLD_REACHED": {
-      const fortress = await tx.fortress.findUnique({ where: { characterId: ctx.characterId } });
-      return fortress?.goldVault ?? 0;
-    }
-    case "UPGRADE_REACHED": {
-      const best = await tx.item.findFirst({ where: { characterId: ctx.characterId }, orderBy: { upgrade: "desc" } });
-      return best?.upgrade ?? 0;
-    }
-    case "ITEM_AFFIX_COUNT": {
-      const items = await tx.item.findMany({ where: { characterId: ctx.characterId } });
-      return items.filter((i) => (i.traits as unknown as { key: string }[]).some((t) => t.key === condition.affixKey)).length;
-    }
-    case "ITEM_QUALITY_COUNT": {
-      return tx.item.count({ where: { characterId: ctx.characterId, quality: condition.quality as never } });
-    }
+      return counterFromMap(ctx.counters, "injuryHealed");
+    case "VAULT_GOLD_REACHED":
+      return ctx.fortressGoldVault;
+    case "UPGRADE_REACHED":
+      return ctx.items.reduce((max, i) => Math.max(max, i.upgrade ?? 0), 0);
+    case "ITEM_AFFIX_COUNT":
+      return ctx.items.filter((i) => (i.traits as unknown as { key: string }[]).some((t) => t.key === condition.affixKey)).length;
+    case "ITEM_QUALITY_COUNT":
+      return ctx.items.filter((i) => i.quality === condition.quality).length;
     case "STAT_REACHED":
       return ctx.stats[condition.stat];
     case "SET_COMPLETE": {
-      const items = await tx.item.findMany({ where: { characterId: ctx.characterId, location: "EQUIPPED" } });
       const bySet = new Map<string, Set<string>>();
-      for (const item of items) {
+      for (const item of ctx.items) {
+        if (item.location !== "EQUIPPED") continue;
         const parsed = parseSetTemplateKey(item.templateKey);
         if (!parsed) continue;
         const slots = bySet.get(parsed.setKey) ?? new Set<string>();
@@ -214,7 +256,16 @@ export interface DeityQuestCompletion {
   grace: number;
 }
 
-/** Sprawdza i przyznaje zadania bóstwa dostępne na obecnym poziomie (Świątynia poziomu 1+ wymagana). */
+const ITEM_DEPENDENT_CONDITIONS = new Set(["UPGRADE_REACHED", "ITEM_AFFIX_COUNT", "ITEM_QUALITY_COUNT", "SET_COMPLETE"]);
+
+/**
+ * Sprawdza i przyznaje zadania bóstwa dostępne na obecnym poziomie (Świątynia
+ * poziomu 1+ wymagana). Wczytuje liczniki/fortecę/przedmioty RAZ dla
+ * wszystkich sprawdzanych zadań (zamiast osobno dla każdego w pętli) – przy
+ * 10 zadaniach na bóstwo to różnica między ~3 a ~30+ zapytaniami w jednej
+ * transakcji rozliczenia wyprawy (patrz komentarz przy TRANSACTION_OPTIONS
+ * w src/lib/expeditions.ts).
+ */
 export async function checkDeityQuests(
   tx: Prisma.TransactionClient,
   characterId: string,
@@ -227,30 +278,58 @@ export async function checkDeityQuests(
   if (swiatyniaLevel < 1) return [];
 
   const eligible = deityQuestsFor(deity).filter((d) => d.level <= characterLevel);
+  if (eligible.length === 0) return [];
+
+  const existingRows = await tx.questProgress.findMany({
+    where: { characterId, questKey: { in: eligible.map((d) => d.key) } },
+  });
+  const existingByKey = new Map(existingRows.map((r) => [r.questKey, r]));
+  const toEvaluate = eligible.filter((def) => existingByKey.get(def.key)?.state !== "COMPLETED");
+  if (toEvaluate.length === 0) return [];
+
+  const neededCounterKeys = new Set<string>();
+  for (const def of toEvaluate) for (const key of neededCounterKeysFor(def.condition)) neededCounterKeys.add(key);
+  const counterRows = neededCounterKeys.size
+    ? await tx.questProgress.findMany({
+        where: { characterId, questKey: { in: [...neededCounterKeys].map((k) => `${COUNTER_PREFIX}${k}`) } },
+      })
+    : [];
+  const counters = new Map(counterRows.map((r) => [r.questKey.slice(COUNTER_PREFIX.length), r.counter]));
+
+  const needsItems = toEvaluate.some((def) => ITEM_DEPENDENT_CONDITIONS.has(def.condition.type));
+  const items = needsItems ? await tx.item.findMany({ where: { characterId } }) : [];
+
+  const ctx: EvalContext = { stats, counters, fortressGoldVault: fortress?.goldVault ?? 0, items };
+
   const completions: DeityQuestCompletion[] = [];
+  const writes: Promise<unknown>[] = [];
 
-  for (const def of eligible) {
-    const existing = await tx.questProgress.findUnique({ where: { characterId_questKey: { characterId, questKey: def.key } } });
-    if (existing?.state === "COMPLETED") continue;
-
-    const value = await evaluateCondition(tx, { characterId, stats }, def.condition);
+  for (const def of toEvaluate) {
+    const value = evaluateConditionSync(def.condition, ctx);
     if (value >= def.condition.target) {
-      await tx.questProgress.upsert({
-        where: { characterId_questKey: { characterId, questKey: def.key } },
-        create: { characterId, questKey: def.key, state: "COMPLETED", counter: value },
-        update: { state: "COMPLETED", counter: value },
-      });
-      await tx.character.update({ where: { id: characterId }, data: { deityGrace: { increment: 1 } } });
-      await tx.gameEvent.create({ data: { characterId, type: "zadanie bóstwa", details: { quest: def.key, deity } } });
+      writes.push(
+        tx.questProgress.upsert({
+          where: { characterId_questKey: { characterId, questKey: def.key } },
+          create: { characterId, questKey: def.key, state: "COMPLETED", counter: value },
+          update: { state: "COMPLETED", counter: value },
+        }),
+      );
+      writes.push(tx.character.update({ where: { id: characterId }, data: { deityGrace: { increment: 1 } } }));
+      writes.push(tx.gameEvent.create({ data: { characterId, type: "zadanie bóstwa", details: { quest: def.key, deity } } }));
       completions.push({ title: def.title, grace: 1 });
-    } else {
-      await tx.questProgress.upsert({
-        where: { characterId_questKey: { characterId, questKey: def.key } },
-        create: { characterId, questKey: def.key, state: "ACTIVE", counter: value },
-        update: { counter: value },
-      });
+    } else if ((existingByKey.get(def.key)?.counter ?? -1) !== value) {
+      // Pomijamy zapis, gdy licznik się nie zmienił od ostatniego sprawdzenia – mniej zapytań bez zmiany stanu.
+      writes.push(
+        tx.questProgress.upsert({
+          where: { characterId_questKey: { characterId, questKey: def.key } },
+          create: { characterId, questKey: def.key, state: "ACTIVE", counter: value },
+          update: { counter: value },
+        }),
+      );
     }
   }
+
+  await Promise.all(writes);
 
   return completions;
 }
