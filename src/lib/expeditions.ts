@@ -258,9 +258,19 @@ export async function startExpedition(
  * wejściu (ochrona przed podwójnym rozliczeniem przy równoległych żądaniach).
  */
 async function settleExpedition(expeditionId: string): Promise<ReportLine[][]> {
-  const expedition = await prisma.expedition.findUniqueOrThrow({ where: { id: expeditionId } });
-  if (expedition.settled) return [];
+  // Zajęcie wyprawy osobnym, natychmiast zatwierdzanym zapisem (nie w $transaction) –
+  // przy nawigacji po kilku zakładkach/kliknięciach naraz dwa równoległe wywołania mogły
+  // obie przejść sprawdzenie "settled" przed zapisem i wejść w pełną transakcję rozliczenia;
+  // druga czekała na blokadę wiersza postaci przez CAŁY czas pierwszej transakcji, co dawało
+  // P2028 "expired transaction" (zob. log: 44s przy limicie 20s). Ten zapis trwa milisekundy,
+  // więc przegrany wyścigu wychodzi od razu, zamiast kolejkować się za całą pracą zwycięzcy.
+  const claimed = await prisma.expedition.updateMany({
+    where: { id: expeditionId, settled: false },
+    data: { settled: true },
+  });
+  if (claimed.count === 0) return [];
 
+  const expedition = await prisma.expedition.findUniqueOrThrow({ where: { id: expeditionId } });
   const character = await prisma.character.findUniqueOrThrow({ where: { id: expedition.characterId } });
   const location = getLocation(expedition.locationKey);
   const equippedItems = await loadEquippedItems(prisma, character.id);
@@ -351,9 +361,6 @@ async function settleExpedition(expeditionId: string): Promise<ReportLine[][]> {
 
   function settleExpeditionTransaction(): Promise<ReportLine[][]> {
     return prisma.$transaction(async (tx) => {
-      const fresh = await tx.expedition.findUniqueOrThrow({ where: { id: expeditionId } });
-    if (fresh.settled) return [];
-
     // Cztery niezależne od siebie funkcje (żadna nie czyta wyniku innej) – odpalone razem
     // zamiast po kolei, żeby nie sumować ich czasu round-tripu do Neon.
     const [, questRewards, huntRewards, dailyReward] = await Promise.all([
@@ -418,7 +425,6 @@ async function settleExpedition(expeditionId: string): Promise<ReportLine[][]> {
           fightsSinceRareDrop: resolution.fightsSinceRareDropAfter,
         },
       }),
-      tx.expedition.update({ where: { id: expedition.id }, data: { settled: true } }),
     ];
 
     if (questGold !== 0) {
