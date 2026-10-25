@@ -7,6 +7,7 @@ import { applyExperience } from "@/game/character/experience";
 import { MAX_STAMINA, regenerateStamina } from "@/game/character/stamina";
 import type { Element, ExpeditionKind, Tactic } from "@/game/combat/types";
 import { generateReport } from "@/game/combat/generateReport";
+import type { ReportLine } from "@/game/combat/report";
 import { EXPEDITION_KINDS } from "@/game/data/expeditionKinds";
 import { AFFIXES } from "@/game/data/itemAffixes";
 import { getLocation, LOCATIONS } from "@/game/data/locations";
@@ -70,7 +71,7 @@ export async function syncCharacter(characterId: string) {
     where: { characterId, settled: false, endAt: { lte: now } },
   });
 
-  let settlementReportLines: string[][] | null = null;
+  let settlementReportLines: ReportLine[][] | null = null;
   if (dueExpedition) {
     settlementReportLines = await settleExpedition(dueExpedition.id);
     character = await prisma.character.findUniqueOrThrow({ where: { id: characterId } });
@@ -215,7 +216,7 @@ export async function startExpedition(
 }
 
 /** Rozlicza wyprawę i zwraca linie raportu każdej walki (do wyświetlenia). */
-async function settleExpedition(expeditionId: string): Promise<string[][]> {
+async function settleExpedition(expeditionId: string): Promise<ReportLine[][]> {
   return prisma.$transaction(async (tx) => {
     const expedition = await tx.expedition.findUniqueOrThrow({ where: { id: expeditionId } });
     if (expedition.settled) return [];
@@ -369,7 +370,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       selectedPotions,
     });
 
-    const allLines: string[][] = [];
+    const allLines: ReportLine[][] = [];
 
     for (const fight of resolution.fights) {
       const monsterDef = getMonster(fight.monsterKey);
@@ -429,7 +430,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
           opponentKey: fight.monsterKey,
           seed: BigInt(fight.seedUsed),
           result: fight.battle.result,
-          turns: lines,
+          turns: JSON.parse(JSON.stringify(lines)),
           loot: lootSummary,
         },
       });
@@ -446,7 +447,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
           (extras.length ? ` (${extras.join(", ")}).` : ".")
         );
       });
-      allLines.push(questLines);
+      allLines.push(questLines.map((text) => ({ text })));
     }
 
     if (huntRewards.length > 0) {
@@ -454,7 +455,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
         const potionName = getPotion(r.potionKey)?.name ?? r.potionKey;
         return `Łowy ukończone! Zdobywasz ${r.xpBonus} PD, ${r.goldBonus} złota i miksturę: ${potionName}.`;
       });
-      allLines.push(huntLines);
+      allLines.push(huntLines.map((text) => ({ text })));
     }
 
     if (dailyReward) {
@@ -469,7 +470,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
             (dailyReward.legendaryBonusItemName ? `: ${dailyReward.legendaryBonusItemName}.` : "."),
         );
       }
-      allLines.push(lines);
+      allLines.push(lines.map((text) => ({ text })));
     }
 
     const deityCompletions = await checkDeityQuests(tx, character.id, leveled.level, character.deity, {
@@ -479,7 +480,7 @@ async function settleExpedition(expeditionId: string): Promise<string[][]> {
       intellect: character.intellect,
     });
     if (deityCompletions.length > 0) {
-      allLines.push(deityCompletions.map((c) => `Zadanie bóstwa ukończone: ${c.title} Zdobywasz łaskę.`));
+      allLines.push(deityCompletions.map((c) => ({ text: `Zadanie bóstwa ukończone: ${c.title} Zdobywasz łaskę.` })));
     }
 
     return allLines;

@@ -94,10 +94,10 @@ describe("generateReport", () => {
 
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) {
-      expect(line).not.toMatch(/\{[A-Z]+\}/);
+      expect(line.text).not.toMatch(/\{[A-Z]+\}/);
     }
     for (let i = 1; i < lines.length; i++) {
-      expect(lines[i]).not.toBe(lines[i - 1]);
+      expect(lines[i].text).not.toBe(lines[i - 1].text);
     }
   });
 });

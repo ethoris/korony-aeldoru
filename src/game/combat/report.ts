@@ -70,16 +70,36 @@ export function fillTemplate(template: string, vars: LineVars): string {
 }
 
 /**
+ * Metadane linii raportu do stylowania "kroniki" (docs/gdd/14-wyglad.md:
+ * liczby obrażeń pogrubione w kolorze żywiołu, krytyki z ikoną) – dodane
+ * obok tekstu, nie zmieniają samej treści linii.
+ */
+export type ReportLineVariant = "victory" | "defeat" | "draw" | "retreat" | "heal";
+
+export interface ReportLine {
+  text: string;
+  element?: Element;
+  crit?: boolean;
+  variant?: ReportLineVariant;
+}
+
+export interface ReportLineMeta {
+  element?: Element;
+  crit?: boolean;
+  variant?: ReportLineVariant;
+}
+
+/**
  * Wybiera linię z puli, bez powtórzenia tej samej linii co ostatnio w raporcie
  * (docs/gdd/03-teksty-raportow.md: „bez powtórzenia tej samej linii dwa razy z rzędu”).
  */
 export class ReportBuilder {
-  private readonly lines: string[] = [];
+  private readonly lines: ReportLine[] = [];
   private lastRawLine: string | null = null;
 
   constructor(private readonly rng: Rng) {}
 
-  push(pool: readonly string[], vars: LineVars): string {
+  push(pool: readonly string[], vars: LineVars, meta?: ReportLineMeta): string {
     let template = pool[Math.floor(this.rng() * pool.length)];
     if (pool.length > 1 && template === this.lastRawLine) {
       const index = pool.indexOf(template);
@@ -87,16 +107,16 @@ export class ReportBuilder {
     }
     this.lastRawLine = template;
     const line = fillTemplate(template, vars);
-    this.lines.push(line);
+    this.lines.push({ text: line, ...meta });
     return line;
   }
 
-  pushLiteral(line: string): void {
+  pushLiteral(line: string, meta?: ReportLineMeta): void {
     this.lastRawLine = line;
-    this.lines.push(line);
+    this.lines.push({ text: line, ...meta });
   }
 
-  toArray(): string[] {
+  toArray(): ReportLine[] {
     return [...this.lines];
   }
 }

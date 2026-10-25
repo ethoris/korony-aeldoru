@@ -3,6 +3,7 @@ import { GENERAL_LINES, MONSTER_LINES, WEAPON_LINES } from "@/game/data/reportTe
 
 import { createRng } from "./rng";
 import { ReportBuilder, elementInstrumental, formatDamage, formatHeal } from "./report";
+import type { ReportLine } from "./report";
 import type { BattleOutcome, HeroConfig, MonsterConfig } from "./types";
 
 export interface ReportContext {
@@ -31,7 +32,7 @@ export function formatGold(amount: number): string {
 }
 
 /** Zamienia przebieg walki (simulate.ts) na linie raportu po polsku. */
-export function generateReport(outcome: BattleOutcome, ctx: ReportContext, seed: number): string[] {
+export function generateReport(outcome: BattleOutcome, ctx: ReportContext, seed: number): ReportLine[] {
   // Osobny generator liczb losowych dla doboru linii – ten sam seed co walka,
   // ale inna "ścieżka" liczb, więc wybór tekstu nie wpływa na losowanie walki.
   const rng = createRng(seed ^ 0x9e3779b9);
@@ -46,7 +47,7 @@ export function generateReport(outcome: BattleOutcome, ctx: ReportContext, seed:
 
   for (const event of outcome.events) {
     if (event.kind === "heal") {
-      builder.push(GENERAL_LINES.healSelf, { A, LECZ: formatHeal(event.amount) });
+      builder.push(GENERAL_LINES.healSelf, { A, LECZ: formatHeal(event.amount) }, { variant: "heal" });
       continue;
     }
 
@@ -62,12 +63,16 @@ export function generateReport(outcome: BattleOutcome, ctx: ReportContext, seed:
         continue;
       }
       const pool = event.crit ? weaponPool.crit : weaponPool.hit;
-      builder.push(pool, {
-        A,
-        C,
-        OBR: formatDamage(event.damage),
-        ZYW: elementInstrumental(event.element),
-      });
+      builder.push(
+        pool,
+        {
+          A,
+          C,
+          OBR: formatDamage(event.damage),
+          ZYW: elementInstrumental(event.element),
+        },
+        { element: event.element, crit: event.crit },
+      );
       if (event.weakHit) builder.pushLiteral(GENERAL_LINES.weaknessLine[0].replace("{C}", C).replace("{ZYW}", elementInstrumental(event.element)));
       if (event.resistHit) builder.pushLiteral(GENERAL_LINES.resistLine[0].replace("{C}", C).replace("{ZYW}", elementInstrumental(event.element)));
       continue;
@@ -82,7 +87,11 @@ export function generateReport(outcome: BattleOutcome, ctx: ReportContext, seed:
       builder.push(monsterPool.miss, { A: C, C: A });
       continue;
     }
-    builder.push(monsterPool.hit, { A: C, C: A, OBR: formatDamage(event.damage) });
+    builder.push(
+      monsterPool.hit,
+      { A: C, C: A, OBR: formatDamage(event.damage), ZYW: elementInstrumental(event.element) },
+      { element: event.element, crit: event.crit },
+    );
     if (event.crit) {
       builder.pushLiteral(GENERAL_LINES.monsterCritSuffix[Math.floor(rng() * GENERAL_LINES.monsterCritSuffix.length)]);
     }
@@ -90,16 +99,20 @@ export function generateReport(outcome: BattleOutcome, ctx: ReportContext, seed:
 
   switch (outcome.result) {
     case "WIN":
-      builder.push(GENERAL_LINES.victory, { A, C, PD: formatExperience(ctx.experience), ZLOTO: formatGold(ctx.gold) });
+      builder.push(
+        GENERAL_LINES.victory,
+        { A, C, PD: formatExperience(ctx.experience), ZLOTO: formatGold(ctx.gold) },
+        { variant: "victory" },
+      );
       break;
     case "LOSE":
-      builder.push(GENERAL_LINES.defeat, { A, C });
+      builder.push(GENERAL_LINES.defeat, { A, C }, { variant: "defeat" });
       break;
     case "DRAW":
-      builder.push(GENERAL_LINES.draw, { A, C });
+      builder.push(GENERAL_LINES.draw, { A, C }, { variant: "draw" });
       break;
     case "RETREAT":
-      builder.push(GENERAL_LINES.retreat, { A, C });
+      builder.push(GENERAL_LINES.retreat, { A, C }, { variant: "retreat" });
       break;
   }
 

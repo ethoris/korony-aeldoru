@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { BattleReportView } from "@/components/BattleReportView";
+import type { ReportLineView } from "@/components/BattleReportView";
+
 interface OpponentView {
   id: string;
   name: string;
@@ -26,7 +29,7 @@ export function PvpClient({
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [report, setReport] = useState<string[] | null>(null);
+  const [report, setReport] = useState<ReportLineView[] | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [tactic, setTactic] = useState("BALANCED");
 
@@ -86,12 +89,8 @@ export function PvpClient({
       </div>
 
       {report && (
-        <div className="rounded-lg border border-line bg-card p-5 font-body text-sm text-foreground">
-          {report.map((line, i) => (
-            <p key={i} className="mb-1">
-              {line}
-            </p>
-          ))}
+        <div className="rounded-lg border border-line bg-card p-5 text-sm">
+          <BattleReportView lines={report} />
         </div>
       )}
 

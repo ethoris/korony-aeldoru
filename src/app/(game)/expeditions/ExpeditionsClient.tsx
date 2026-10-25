@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { BattleReportView } from "@/components/BattleReportView";
+import type { ReportLineView } from "@/components/BattleReportView";
 import type { ExpeditionKindDefinition } from "@/game/data/expeditionKinds";
 
 interface LocationSummary {
@@ -87,7 +89,7 @@ export function ExpeditionsClient({
   activeExpedition: ActiveExpedition | null;
   locations: LocationSummary[];
   kinds: Record<string, ExpeditionKindDefinition>;
-  lastReport: string[] | null;
+  lastReport: ReportLineView[] | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -191,10 +193,8 @@ export function ExpeditionsClient({
           <h2 className="font-display text-lg font-bold uppercase tracking-wide text-foreground">
             Ostatni raport
           </h2>
-          <div className="font-body mt-3 flex flex-col gap-2 text-foreground">
-            {lastReport.map((line, i) => (
-              <p key={i}>{line}</p>
-            ))}
+          <div className="mt-3">
+            <BattleReportView lines={lastReport} />
           </div>
         </div>
       )}

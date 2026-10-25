@@ -5,6 +5,7 @@ import { applyExperience, experienceToNextLevel } from "@/game/character/experie
 import { dayKeyFor } from "@/game/data/dailyReset";
 import { simulatePvpDuel } from "@/game/combat/duel";
 import { generatePvpReport } from "@/game/combat/generatePvpReport";
+import type { ReportLine } from "@/game/combat/report";
 import type { BattleResult, Tactic } from "@/game/combat/types";
 import type { ItemAffixInstance } from "@/game/items/types";
 import { NEW_PLAYER_PROTECTION_DAYS, isNewPlayerProtected, protectionEndsAt } from "@/game/character/newPlayerProtection";
@@ -93,7 +94,7 @@ export async function listOpponents(characterId: string): Promise<OpponentView[]
 }
 
 export type AttackPlayerResult =
-  | { ok: true; result: BattleResult; report: string[]; fameDeltaSelf: number; goldGained: number; experienceGained: number }
+  | { ok: true; result: BattleResult; report: ReportLine[]; fameDeltaSelf: number; goldGained: number; experienceGained: number }
   | { error: string };
 
 /** Pojedynek PvP (docs/gdd/00-glowny.md, docs/gdd/02-systemy-walki.md). */
@@ -198,7 +199,7 @@ export async function attackPlayer(attackerId: string, defenderId: string, tacti
         opponentKey: `pvp:${defenderId}`,
         seed: BigInt(seed),
         result: outcome.result,
-        turns: report,
+        turns: JSON.parse(JSON.stringify(report)),
         loot: [],
       },
     });
@@ -220,7 +221,10 @@ export async function attackPlayer(attackerId: string, defenderId: string, tacti
       vitality: attackerFresh.vitality,
       intellect: attackerFresh.intellect,
     });
-    const fullReport = [...report, ...deityCompletions.map((c) => `Zadanie bóstwa ukończone: ${c.title} Zdobywasz łaskę.`)];
+    const fullReport = [
+      ...report,
+      ...deityCompletions.map((c) => ({ text: `Zadanie bóstwa ukończone: ${c.title} Zdobywasz łaskę.` })),
+    ];
 
     return { ok: true, result: outcome.result, report: fullReport, fameDeltaSelf, goldGained, experienceGained };
   });
