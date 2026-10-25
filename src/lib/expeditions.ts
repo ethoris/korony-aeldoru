@@ -330,37 +330,41 @@ async function settleExpedition(expeditionId: string): Promise<ReportLine[][]> {
     const fresh = await tx.expedition.findUniqueOrThrow({ where: { id: expeditionId } });
     if (fresh.settled) return [];
 
-    await recordExpeditionDeitySignals(tx, character.id, resolution, expedition.kind);
-    const questRewards = await progressLocationQuests(tx, {
-      characterId: character.id,
-      characterLevel: afterBattleLevel.level,
-      characterClass: character.class,
-      locationKey: location.key,
-      expeditionKind: expedition.kind,
-      winCount,
-      bossKey: expedition.kind === "BOSS" ? (location.bossKey ?? null) : null,
-      bossResult: expedition.kind === "BOSS" ? resolution.overallResult : null,
-    });
-    const huntRewards = await progressLocationHunts(tx, {
-      characterId: character.id,
-      characterLevel: afterBattleLevel.level,
-      locationKey: location.key,
-      winCount,
-      now: new Date(),
-    });
-    const dailyReward = await progressDailyQuests(tx, {
-      characterId: character.id,
-      characterLevel: afterBattleLevel.level,
-      characterClass: character.class,
-      now: new Date(),
-      delta: {
-        expeditions: 1,
-        wins: winCount,
-        bossWin: expedition.kind === "BOSS" && resolution.overallResult === "WIN",
-        goldEarned: resolution.totalGoldDelta,
-        lootFound: resolution.fights.some((f) => f.lootItem !== null),
-      },
-    });
+    // Cztery niezależne od siebie funkcje (żadna nie czyta wyniku innej) – odpalone razem
+    // zamiast po kolei, żeby nie sumować ich czasu round-tripu do Neon.
+    const [, questRewards, huntRewards, dailyReward] = await Promise.all([
+      recordExpeditionDeitySignals(tx, character.id, resolution, expedition.kind),
+      progressLocationQuests(tx, {
+        characterId: character.id,
+        characterLevel: afterBattleLevel.level,
+        characterClass: character.class,
+        locationKey: location.key,
+        expeditionKind: expedition.kind,
+        winCount,
+        bossKey: expedition.kind === "BOSS" ? (location.bossKey ?? null) : null,
+        bossResult: expedition.kind === "BOSS" ? resolution.overallResult : null,
+      }),
+      progressLocationHunts(tx, {
+        characterId: character.id,
+        characterLevel: afterBattleLevel.level,
+        locationKey: location.key,
+        winCount,
+        now: new Date(),
+      }),
+      progressDailyQuests(tx, {
+        characterId: character.id,
+        characterLevel: afterBattleLevel.level,
+        characterClass: character.class,
+        now: new Date(),
+        delta: {
+          expeditions: 1,
+          wins: winCount,
+          bossWin: expedition.kind === "BOSS" && resolution.overallResult === "WIN",
+          goldEarned: resolution.totalGoldDelta,
+          lootFound: resolution.fights.some((f) => f.lootItem !== null),
+        },
+      }),
+    ]);
 
     const questXp = questRewards.reduce((sum, r) => sum + r.xpBonus, 0) + huntRewards.reduce((sum, r) => sum + r.xpBonus, 0);
     const questGold =
@@ -375,101 +379,128 @@ async function settleExpedition(expeditionId: string): Promise<ReportLine[][]> {
     const newGoldPouch = goldAfterBattle + questGold;
     const freePointsGained = afterBattleLevel.freePointsGained + (questXp > 0 ? leveled.freePointsGained : 0);
 
-    await tx.character.update({
-      where: { id: character.id },
-      data: {
-        level: leveled.level,
-        experience: leveled.experience,
-        freePoints: character.freePoints + freePointsGained,
-        goldPouch: newGoldPouch,
-        stamina: Math.min(MAX_STAMINA, character.stamina + questStamina),
-        injuredUntil: newInjuredUntil,
-        fightsSinceRareDrop: resolution.fightsSinceRareDropAfter,
-      },
-    });
+    // Niezależne zapisy (żaden nie czyta wyniku innego – wszystkie liczby już policzone
+    // wyżej) odpalone razem zamiast po kolei.
+    const postBattleWrites: Promise<unknown>[] = [
+      tx.character.update({
+        where: { id: character.id },
+        data: {
+          level: leveled.level,
+          experience: leveled.experience,
+          freePoints: character.freePoints + freePointsGained,
+          goldPouch: newGoldPouch,
+          stamina: Math.min(MAX_STAMINA, character.stamina + questStamina),
+          injuredUntil: newInjuredUntil,
+          fightsSinceRareDrop: resolution.fightsSinceRareDropAfter,
+        },
+      }),
+      tx.expedition.update({ where: { id: expedition.id }, data: { settled: true } }),
+    ];
 
     if (questGold !== 0) {
-      await tx.goldEvent.create({
-        data: {
-          characterId: character.id,
-          amount: questGold,
-          balanceAfter: newGoldPouch,
-          reason: "zadanie ukończone",
-        },
-      });
+      postBattleWrites.push(
+        tx.goldEvent.create({
+          data: {
+            characterId: character.id,
+            amount: questGold,
+            balanceAfter: newGoldPouch,
+            reason: "zadanie ukończone",
+          },
+        }),
+      );
     }
 
-    await tx.expedition.update({ where: { id: expedition.id }, data: { settled: true } });
-
     for (const potionKey of resolution.potionsConsumed) {
-      await tx.consumable.updateMany({
-        where: { characterId: character.id, kind: potionKey, quantity: { gt: 0 } },
-        data: { quantity: { decrement: 1 } },
-      });
+      postBattleWrites.push(
+        tx.consumable.updateMany({
+          where: { characterId: character.id, kind: potionKey, quantity: { gt: 0 } },
+          data: { quantity: { decrement: 1 } },
+        }),
+      );
     }
 
     if (resolution.totalGoldDelta !== 0) {
-      await tx.goldEvent.create({
-        data: {
-          characterId: character.id,
-          amount: resolution.totalGoldDelta,
-          balanceAfter: newGoldPouch,
-          reason: `wyprawa: ${location.name}`,
-        },
-      });
+      postBattleWrites.push(
+        tx.goldEvent.create({
+          data: {
+            characterId: character.id,
+            amount: resolution.totalGoldDelta,
+            balanceAfter: newGoldPouch,
+            reason: `wyprawa: ${location.name}`,
+          },
+        }),
+      );
     }
 
     if (leveled.level > character.level) {
-      await tx.gameEvent.create({
-        data: { characterId: character.id, type: "awans", details: { level: leveled.level } },
-      });
+      postBattleWrites.push(
+        tx.gameEvent.create({
+          data: { characterId: character.id, type: "awans", details: { level: leveled.level } },
+        }),
+      );
     }
 
+    await Promise.all(postBattleWrites);
+
     const allLines: ReportLine[][] = [];
+    // Raporty i łupy każdej walki nie zależą od siebie nawzajem – zapisy odpalone razem.
+    const fightWrites: Promise<unknown>[] = [];
 
     for (const { fight, lines } of fightReports) {
       allLines.push(lines);
 
-      let lootSummary: Array<{ name: string; slot: string; quality: string }> = [];
+      const lootSummary: Array<{ name: string; slot: string; quality: string }> = fight.lootItem
+        ? [{ name: fight.lootItem.name, slot: fight.lootItem.slot, quality: fight.lootItem.quality }]
+        : [];
+
       if (fight.lootItem) {
-        const item = await tx.item.create({
-          data: {
-            characterId: character.id,
-            name: fight.lootItem.name,
-            slot: fight.lootItem.slot,
-            level: fight.lootItem.level,
-            quality: fight.lootItem.quality,
-            forClass: fight.lootItem.forClass,
-            damageMin: fight.lootItem.damageMin,
-            damageMax: fight.lootItem.damageMax,
-            armor: fight.lootItem.armor,
-            traits: JSON.parse(JSON.stringify(fight.lootItem.affixes)),
-          },
-        });
-        await tx.itemEvent.create({
-          data: {
-            itemId: item.id,
-            characterId: character.id,
-            type: "CREATED",
-            toState: { name: fight.lootItem.name, slot: item.slot, quality: item.quality },
-            reason: `łup: ${location.name}`,
-          },
-        });
-        lootSummary = [{ name: fight.lootItem.name, slot: fight.lootItem.slot, quality: fight.lootItem.quality }];
+        const lootItem = fight.lootItem;
+        fightWrites.push(
+          tx.item
+            .create({
+              data: {
+                characterId: character.id,
+                name: lootItem.name,
+                slot: lootItem.slot,
+                level: lootItem.level,
+                quality: lootItem.quality,
+                forClass: lootItem.forClass,
+                damageMin: lootItem.damageMin,
+                damageMax: lootItem.damageMax,
+                armor: lootItem.armor,
+                traits: JSON.parse(JSON.stringify(lootItem.affixes)),
+              },
+            })
+            .then((item) =>
+              tx.itemEvent.create({
+                data: {
+                  itemId: item.id,
+                  characterId: character.id,
+                  type: "CREATED",
+                  toState: { name: lootItem.name, slot: item.slot, quality: item.quality },
+                  reason: `łup: ${location.name}`,
+                },
+              }),
+            ),
+        );
       }
 
-      await tx.battleReport.create({
-        data: {
-          characterId: character.id,
-          expeditionId: expedition.id,
-          opponentKey: fight.monsterKey,
-          seed: BigInt(fight.seedUsed),
-          result: fight.battle.result,
-          turns: JSON.parse(JSON.stringify(lines)),
-          loot: lootSummary,
-        },
-      });
+      fightWrites.push(
+        tx.battleReport.create({
+          data: {
+            characterId: character.id,
+            expeditionId: expedition.id,
+            opponentKey: fight.monsterKey,
+            seed: BigInt(fight.seedUsed),
+            result: fight.battle.result,
+            turns: JSON.parse(JSON.stringify(lines)),
+            loot: lootSummary,
+          },
+        }),
+      );
     }
+
+    await Promise.all(fightWrites);
 
     if (questRewards.length > 0) {
       const questLines = questRewards.map((r) => {

@@ -33,54 +33,74 @@ export async function recordExpeditionDeitySignals(
 ): Promise<void> {
   const noPotionAtAll = resolution.potionsConsumed.length === 0;
 
+  // Zlicza wszystkie zmiany liczników w pamięci (bez zapytań), żeby na końcu
+  // wysłać same zapisy naraz (Promise.all) zamiast po kolei – przy wyprawie
+  // z kilkoma walkami to różnica między kilkunastoma a kilkoma round-tripami
+  // w jednej transakcji (patrz TRANSACTION_OPTIONS w src/lib/expeditions.ts).
+  const deltas = new Map<string, number>();
+  const addDelta = (key: string, amount: number) => {
+    if (amount === 0) return;
+    deltas.set(key, (deltas.get(key) ?? 0) + amount);
+  };
+
+  const bossWinFights = resolution.fights.filter((f) => f.isBoss && f.battle.result === "WIN");
+  const comebackMarkers = await Promise.all(
+    bossWinFights.map((fight) =>
+      tx.questProgress.findUnique({
+        where: { characterId_questKey: { characterId, questKey: `${BOSS_LOSS_PREFIX}${fight.monsterKey}` } },
+      }),
+    ),
+  );
+  bossWinFights.forEach((fight, i) => {
+    const marker = comebackMarkers[i];
+    if (marker && Date.now() - marker.updatedAt.getTime() <= BOSS_COMEBACK_WINDOW_MS) {
+      addDelta("bossComeback", 1);
+    }
+  });
+
+  const bossLossUpserts: Promise<unknown>[] = [];
+
   for (const fight of resolution.fights) {
     const monster = getMonster(fight.monsterKey);
     const crits = fight.battle.events.filter((e) => e.kind === "attack" && e.actor === "hero" && e.crit).length;
     if (crits > 0) {
-      await incrementCounter(tx, characterId, "critTotal", crits);
-      if (fight.isBoss) await incrementCounter(tx, characterId, "critBoss", crits);
+      addDelta("critTotal", crits);
+      if (fight.isBoss) addDelta("critBoss", crits);
     }
     const dodges = fight.battle.events.filter((e) => e.kind === "attack" && e.actor === "monster" && !e.hit).length;
-    if (dodges > 0) await incrementCounter(tx, characterId, "dodgeTotal", dodges);
+    if (dodges > 0) addDelta("dodgeTotal", dodges);
 
     if (fight.battle.result === "WIN") {
-      await incrementCounter(tx, characterId, `winType:${monster.type}`, 1);
+      addDelta(`winType:${monster.type}`, 1);
       if (noPotionAtAll) {
-        await incrementCounter(tx, characterId, `winNoPotionType:${monster.type}`, 1);
-        await incrementCounter(tx, characterId, "winNoPotionAny", 1);
-        if (kind === "DEEP") await incrementCounter(tx, characterId, "deepWinNoPotion", 1);
-        if (fight.isBoss) await incrementCounter(tx, characterId, "bossWinNoPotion", 1);
+        addDelta(`winNoPotionType:${monster.type}`, 1);
+        addDelta("winNoPotionAny", 1);
+        if (kind === "DEEP") addDelta("deepWinNoPotion", 1);
+        if (fight.isBoss) addDelta("bossWinNoPotion", 1);
       }
-      if (kind === "SCOUT") await incrementCounter(tx, characterId, "scoutWin", 1);
+      if (kind === "SCOUT") addDelta("scoutWin", 1);
 
       if (fight.battle.heroHpStart > 0 && fight.battle.heroHpEnd / fight.battle.heroHpStart < 0.1) {
-        await incrementCounter(tx, characterId, "narrowWin", 1);
-      }
-
-      if (fight.isBoss) {
-        const lossMarkerKey = `${BOSS_LOSS_PREFIX}${fight.monsterKey}`;
-        const marker = await tx.questProgress.findUnique({
-          where: { characterId_questKey: { characterId, questKey: lossMarkerKey } },
-        });
-        if (marker && Date.now() - marker.updatedAt.getTime() <= BOSS_COMEBACK_WINDOW_MS) {
-          await incrementCounter(tx, characterId, "bossComeback", 1);
-        }
+        addDelta("narrowWin", 1);
       }
     } else if (fight.battle.result === "LOSE") {
-      await incrementCounter(tx, characterId, "loseTotal", 1);
+      addDelta("loseTotal", 1);
       if (fight.isBoss) {
-        await tx.questProgress.upsert({
-          where: { characterId_questKey: { characterId, questKey: `${BOSS_LOSS_PREFIX}${fight.monsterKey}` } },
-          create: { characterId, questKey: `${BOSS_LOSS_PREFIX}${fight.monsterKey}`, state: "ACTIVE", counter: 0 },
-          update: { counter: 0 },
-        });
+        bossLossUpserts.push(
+          tx.questProgress.upsert({
+            where: { characterId_questKey: { characterId, questKey: `${BOSS_LOSS_PREFIX}${fight.monsterKey}` } },
+            create: { characterId, questKey: `${BOSS_LOSS_PREFIX}${fight.monsterKey}`, state: "ACTIVE", counter: 0 },
+            update: { counter: 0 },
+          }),
+        );
       }
     }
   }
 
-  if (resolution.totalGoldDelta > 0) {
-    await incrementCounter(tx, characterId, "expeditionGold", resolution.totalGoldDelta);
-  }
+  if (resolution.totalGoldDelta > 0) addDelta("expeditionGold", resolution.totalGoldDelta);
+
+  const counterWrites = [...deltas.entries()].map(([key, amount]) => incrementCounter(tx, characterId, key, amount));
+  await Promise.all([...counterWrites, ...bossLossUpserts]);
 }
 
 export async function recordPvpWinSignal(tx: Prisma.TransactionClient, characterId: string, tactic: string): Promise<void> {
