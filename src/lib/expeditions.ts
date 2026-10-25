@@ -26,12 +26,20 @@ import type { Prisma } from "@/generated/prisma/client";
 export const SERVER = "Valmor";
 
 /**
- * Rozliczenie wyprawy robi wiele kolejnych zapytań w jednej transakcji
- * (zadania lokacji, łowy, zadania dzienne, zadania bóstw, raporty walk,
- * łupy) – nad zwykły 5 s budżet Prisma przy realnych opóźnieniach sieci do
- * Neon (potwierdzone w logach produkcji: P2028 "expired transaction").
+ * UWAGA: podnoszenie tego limitu z 5000ms na 15000ms (wersja poprzednia tego
+ * komentarza) spowodowało w produkcji coś gorszego niż P2028 – requesty na
+ * /expeditions, /inventory, /napady zawieszały się na 300s (twardy limit
+ * Vercela), zamiast szybko zawieść. To wygląda na wyczerpanie/zatrucie puli
+ * połączeń do Neon (pojedynczy klient Prisma w src/lib/prisma.ts żyje przez
+ * cały czas trwania "ciepłego" kontenera serverless) – dłużej trzymana
+ * transakcja = dłużej zajęte połączenie = większa szansa na zator innych
+ * żądań. Cofnięte do wartości bliskiej domyślnej: krótka, szybka porażka
+ * (P2028, da się przeładować stronę) jest bezpieczniejsza niż 5-minutowe
+ * zawieszenie całej gry. Do przeglądu: prawdziwa przyczyna leży raczej w
+ * architekturze połączenia (adapter WebSocket + singleton klienta), nie w
+ * samej liczbie milisekund.
  */
-const TRANSACTION_OPTIONS: { timeout: number } = { timeout: 15_000 };
+const TRANSACTION_OPTIONS: { timeout: number } = { timeout: 8_000 };
 
 async function loadEquippedItems(
   tx: Prisma.TransactionClient,
