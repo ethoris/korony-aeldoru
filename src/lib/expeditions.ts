@@ -231,48 +231,104 @@ export async function startExpedition(
   return { expeditionId: expedition.id, endAt: expedition.endAt };
 }
 
-/** Rozlicza wyprawę i zwraca linie raportu każdej walki (do wyświetlenia). */
+/**
+ * Rozlicza wyprawę i zwraca linie raportu każdej walki (do wyświetlenia).
+ *
+ * Odczyty i obliczenia (symulacja walki, raporty, heroConfig) celowo dzieją
+ * się POZA transakcją – liczy się do budżetu Prisma interactive transaction
+ * (TRANSACTION_OPTIONS) tak samo jak czas sieci, więc ciężkie obliczenia w
+ * środku transakcji zabierały czas, który powinien iść na same zapisy.
+ * Transakcja zostaje tylko do zapisów, z ponownym sprawdzeniem `settled` na
+ * wejściu (ochrona przed podwójnym rozliczeniem przy równoległych żądaniach).
+ */
 async function settleExpedition(expeditionId: string): Promise<ReportLine[][]> {
-  return prisma.$transaction(async (tx) => {
-    const expedition = await tx.expedition.findUniqueOrThrow({ where: { id: expeditionId } });
-    if (expedition.settled) return [];
+  const expedition = await prisma.expedition.findUniqueOrThrow({ where: { id: expeditionId } });
+  if (expedition.settled) return [];
 
-    const character = await tx.character.findUniqueOrThrow({ where: { id: expedition.characterId } });
-    const location = getLocation(expedition.locationKey);
-    const equippedItems = await loadEquippedItems(tx, character.id);
-    const selectedAbilities = (expedition.abilities as unknown as string[]) ?? [];
-    const selectedPotions = (expedition.potions as unknown as string[]) ?? [];
-    const spellElement = expedition.spellElement as Element | null;
+  const character = await prisma.character.findUniqueOrThrow({ where: { id: expedition.characterId } });
+  const location = getLocation(expedition.locationKey);
+  const equippedItems = await loadEquippedItems(prisma, character.id);
+  const selectedAbilities = (expedition.abilities as unknown as string[]) ?? [];
+  const selectedPotions = (expedition.potions as unknown as string[]) ?? [];
+  const spellElement = expedition.spellElement as Element | null;
 
-    const resolution = resolveExpedition({
-      classKey: character.class,
-      level: character.level,
-      stats: {
-        strength: character.strength,
-        dexterity: character.dexterity,
-        vitality: character.vitality,
-        intellect: character.intellect,
+  const resolution = resolveExpedition({
+    classKey: character.class,
+    level: character.level,
+    stats: {
+      strength: character.strength,
+      dexterity: character.dexterity,
+      vitality: character.vitality,
+      intellect: character.intellect,
+    },
+    tactic: expedition.tactic,
+    location,
+    kind: expedition.kind,
+    seed: Number(expedition.seed),
+    startingGoldPouch: character.goldPouch,
+    fightsSinceRareDrop: character.fightsSinceRareDrop,
+    deity: character.deity,
+    deityGrace: character.deityGrace,
+    equippedItems,
+    selectedAbilities,
+    selectedPotions,
+    spellElement: spellElement ?? undefined,
+  });
+
+  const afterBattleLevel = applyExperience(character.level, character.experience, character.race, resolution.totalXp);
+  const goldAfterBattle = Math.max(0, character.goldPouch + resolution.totalGoldDelta);
+  const newInjuredUntil =
+    resolution.injuredMinutes > 0 ? new Date(Date.now() + resolution.injuredMinutes * 60 * 1000) : character.injuredUntil;
+
+  const winCount = resolution.fights.filter((f) => f.battle.result === "WIN").length;
+
+  // heroConfig i raporty walk to czysta funkcja tekstu/stylu (src/game/combat) – zero zapytań do bazy, liczymy poza transakcją.
+  const heroConfigForReport = buildHeroConfigFromEquipment({
+    classKey: character.class,
+    level: character.level,
+    stats: {
+      strength: character.strength,
+      dexterity: character.dexterity,
+      vitality: character.vitality,
+      intellect: character.intellect,
+    },
+    tactic: expedition.tactic,
+    spellElement: spellElement ?? undefined,
+    equippedItems,
+    selectedAbilities,
+    deity: character.deity,
+    deityGrace: character.deityGrace,
+    selectedPotions,
+  });
+
+  const fightReports = resolution.fights.map((fight) => {
+    const monsterDef = getMonster(fight.monsterKey);
+    const lines = generateReport(
+      fight.battle,
+      {
+        heroName: character.name,
+        monster: {
+          key: monsterDef.key,
+          name: monsterDef.name,
+          level: monsterDef.level,
+          type: monsterDef.type,
+          isBoss: monsterDef.isBoss,
+          weakTo: monsterDef.weakTo,
+          resistTo: monsterDef.resistTo,
+        },
+        hero: heroConfigForReport,
+        experience: fight.xpGained,
+        gold: Math.max(0, fight.goldDelta),
       },
-      tactic: expedition.tactic,
-      location,
-      kind: expedition.kind,
-      seed: Number(expedition.seed),
-      startingGoldPouch: character.goldPouch,
-      fightsSinceRareDrop: character.fightsSinceRareDrop,
-      deity: character.deity,
-      deityGrace: character.deityGrace,
-      equippedItems,
-      selectedAbilities,
-      selectedPotions,
-      spellElement: spellElement ?? undefined,
-    });
+      fight.seedUsed,
+    );
+    return { fight, lines };
+  });
 
-    const afterBattleLevel = applyExperience(character.level, character.experience, character.race, resolution.totalXp);
-    const goldAfterBattle = Math.max(0, character.goldPouch + resolution.totalGoldDelta);
-    const newInjuredUntil =
-      resolution.injuredMinutes > 0 ? new Date(Date.now() + resolution.injuredMinutes * 60 * 1000) : character.injuredUntil;
+  return prisma.$transaction(async (tx) => {
+    const fresh = await tx.expedition.findUniqueOrThrow({ where: { id: expeditionId } });
+    if (fresh.settled) return [];
 
-    const winCount = resolution.fights.filter((f) => f.battle.result === "WIN").length;
     await recordExpeditionDeitySignals(tx, character.id, resolution, expedition.kind);
     const questRewards = await progressLocationQuests(tx, {
       characterId: character.id,
@@ -368,47 +424,9 @@ async function settleExpedition(expeditionId: string): Promise<ReportLine[][]> {
       });
     }
 
-    const heroConfig = buildHeroConfigFromEquipment({
-      classKey: character.class,
-      level: character.level,
-      stats: {
-        strength: character.strength,
-        dexterity: character.dexterity,
-        vitality: character.vitality,
-        intellect: character.intellect,
-      },
-      tactic: expedition.tactic,
-      spellElement: spellElement ?? undefined,
-      equippedItems,
-      selectedAbilities,
-      deity: character.deity,
-      deityGrace: character.deityGrace,
-      selectedPotions,
-    });
-
     const allLines: ReportLine[][] = [];
 
-    for (const fight of resolution.fights) {
-      const monsterDef = getMonster(fight.monsterKey);
-      const lines = generateReport(
-        fight.battle,
-        {
-          heroName: character.name,
-          monster: {
-            key: monsterDef.key,
-            name: monsterDef.name,
-            level: monsterDef.level,
-            type: monsterDef.type,
-            isBoss: monsterDef.isBoss,
-            weakTo: monsterDef.weakTo,
-            resistTo: monsterDef.resistTo,
-          },
-          hero: heroConfig,
-          experience: fight.xpGained,
-          gold: Math.max(0, fight.goldDelta),
-        },
-        fight.seedUsed,
-      );
+    for (const { fight, lines } of fightReports) {
       allLines.push(lines);
 
       let lootSummary: Array<{ name: string; slot: string; quality: string }> = [];
