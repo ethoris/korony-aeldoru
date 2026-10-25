@@ -28,6 +28,21 @@ Po poprawkach wszystkie klasy wygrywają ze zwykłym potworem swojego poziomu, a
 - Paladyn walczy długo (do 12 tur); sprawdzić, czy gracze nie uznają tego za nudne.
 - Wszystkie wyniki powtórzyć po zakodowaniu zdolności, mikstur, zestawów i ulepszeń do +10 (krok 2 w zakładce Technika).
 
+## Trzecia symulacja (pełny ekwipunek) – do przeglądu z Patrykiem
+
+Po wdrożeniu zdolności, mikstur, zestawów, ulepszeń kowala do +10 i bonusów bóstw (`src/game/combat/__tests__/balance.simulation.full.test.ts`, ta sama metoda: 300 walk/klasę/poziom, bossowie swojego poziomu) – bohater "w pełnym rynsztunku" (3 najlepsze odblokowane zdolności, pasek 3 mikstur bojowych, zestaw klasowy 2 cz. od poz. 50/100, ekwipunek +10, bonus bóstwa dopasowanego do klasy) wygrywa z bossem swojego poziomu **97–100% walk w każdej klasie i na każdym poziomie** – zamiast celu 25–50% z tabeli wyżej. Różnica względem drugiej symulacji (bez tych bonusów) to +29 do +80 punktów procentowych, czyli znacznie więcej niż szacowane w GDD „ok. 15–25%”.
+
+**Wniosek:** każdy z osobna system (zdolności, mikstury, zestawy, kowal +10, bóstwa) jest niewielkim bonusem, ale ich **sumowanie w tej samej walce** usuwa wyzwanie z bossów całkowicie – gracz, który w pełni wykorzystuje wszystkie systemy przygotowania, nigdy nie przegrywa z bossem swojego poziomu. To nie jest błąd silnika (liczby się zgadzają ze wzorami z `02-systemy-walki.md`/`08-ekwipunek.md`) – to sygnał, że same wzory bonusów są za duże, gdy się je złoży.
+
+**Nie zmieniono żadnej liczby balansu** (zgodnie z zasadą w `CLAUDE.md`) – to opis problemu, decyzja należy do Patryka. Możliwe kierunki do wyboru:
+
+1. Zmniejszyć pojedyncze bonusy (np. mikstury z +15/+20% na +8/+10%, premię 2 cz. zestawu o połowę) – najmniej inwazyjne, ale trudno dobrać właściwą skalę bez kolejnej symulacji.
+2. Wprowadzić redukcję przy sumowaniu (np. bonusy procentowe multiplikatywne, nie addytywne, albo "diminishing returns" powyżej pewnego sumarycznego %) – bardziej systemowe, ale nowa mechanika.
+3. Podnieść bazowe staty bossów swojego poziomu (PŻ/obrona/atak), żeby nadrabiały przewagę w pełnym przygotowaniu – zgodne z duchem "boss to wyzwanie, warto się przygotować", ale wymaga też utrzymania sensownych walk dla gracza BEZ przygotowania (patrz druga symulacja, 21–71%).
+4. Zaakceptować wynik: granie "na pełnym wyposażeniu" ma być łatwe, a wyzwaniem są bossowie ponadpoziomowi albo arena PvP – wymaga tylko aktualizacji opisu celu w tym pliku, bez zmian w kodzie.
+
+Założenia doboru bóstwa/łaski dla tej symulacji są opisane w komentarzu przy `buildFullGearTestHero` w `src/game/combat/equipment.ts`.
+
 ## Tempo gry
 
 Cel: aktywny gracz osiąga poziom 120 po ok. 90 dniach. Poprzednia krzywa (100 × poziom^1,5 przy 10 PD za poziom potwora) wymagała ok. 8 600 walk, czyli ok. 290 dni.
