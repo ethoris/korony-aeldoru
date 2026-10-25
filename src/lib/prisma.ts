@@ -11,7 +11,17 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-  const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL! });
+  // KRYTYCZNE: bez connectionTimeoutMillis, @neondatabase/serverless Pool
+  // (domyślnie max 10 połączeń) kolejkuje żądanie o połączenie BEZ ŻADNEGO
+  // TIMEOUTU, gdy pula jest zajęta – stąd zawieszenia do 300s (twardy limit
+  // Vercela) widoczne w produkcji na różnych, niepowiązanych trasach
+  // (/expeditions, /inventory, /napady, /twierdza). Z timeoutem taka sytuacja
+  // kończy się szybkim, czytelnym błędem połączenia zamiast wielominutowego
+  // zawieszenia całej strony.
+  const adapter = new PrismaNeon({
+    connectionString: process.env.DATABASE_URL!,
+    connectionTimeoutMillis: 10_000,
+  });
   return new PrismaClient({ adapter });
 }
 
